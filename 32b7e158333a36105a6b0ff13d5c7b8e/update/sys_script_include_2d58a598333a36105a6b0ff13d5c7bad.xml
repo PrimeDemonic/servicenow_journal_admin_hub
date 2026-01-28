@@ -1,0 +1,514 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>public</access>
+        <active>true</active>
+        <api_name>x_cros2_journal_0.JournalAdminService</api_name>
+        <caller_access/>
+        <client_callable>false</client_callable>
+        <description>Server functions for working with journal action hub</description>
+        <mobile_callable>false</mobile_callable>
+        <name>JournalAdminService</name>
+        <sandbox_callable>false</sandbox_callable>
+        <script><![CDATA[var JournalAdminService = Class.create();
+JournalAdminService.prototype = {
+    initialize: function() {
+        this.PROP_ALLOWED_ROLES = 'allowed_roles';
+        this.PROP_SECURE_LOOKUP = 'use_secure_lookup';
+    },
+
+    getConfig: function() {
+        return {
+            allowedRoles: (gs.getProperty(this.PROP_ALLOWED_ROLES, '') || '').trim(),
+            useSecureLookup: gs.getProperty(this.PROP_SECURE_LOOKUP, 'false') === 'true'
+        };
+    },
+
+    canUse: function() {
+        var cfg = this.getConfig();
+        if (!cfg.allowedRoles) return true;
+
+        var roles = cfg.allowedRoles.split(',').map(function(r) {
+            return (r || '').trim();
+        }).filter(Boolean);
+        for (var i = 0; i < roles.length; i++) {
+            if (gs.hasRole(roles[i])) return true;
+        }
+        return false;
+    },
+
+    _assertCanUse: function() {
+        if (!this.canUse()) throw 'User not authorized to use JournalAdminService.';
+    },
+
+    getTablePickerQuery: function() {
+        this._assertCanUse();
+
+        var sysIdSet = this._getJournalEnabledTableSysIdSet();
+        var ids = Object.keys(sysIdSet);
+
+        // If nothing, return a query that yields no results.
+        if (!ids.length) return 'sys_idIN';
+
+        return 'sys_idIN' + ids.join(',');
+    },
+
+    getJournalEnabledTables: function() {
+        this._assertCanUse();
+
+        var sysIdSet = this._getJournalEnabledTableSysIdSet();
+        var ids = Object.keys(sysIdSet);
+
+        var out = [];
+        if (!ids.length) return {
+            ok: true,
+            tables: out
+        };
+
+        var grObj = this._getMetaGR('sys_db_object');
+        grObj.addQuery('sys_id', 'IN', ids.join(','));
+        grObj.orderBy('label');
+        grObj.query();
+        while (grObj.next()) {
+            out.push({
+                name: grObj.getValue('name'),
+                label: grObj.getValue('label') || grObj.getValue('name')
+            });
+        }
+
+        return {
+            ok: true,
+            tables: out
+        };
+    },
+
+    _getJournalEnabledTableSysIdSet: function() {
+        // 1) base tables from dictionary -> convert to sys_db_object sys_ids
+        var baseSysIds = this._getBaseTableSysIdsWithJournalFields();
+
+        // 2) expand via sys_db_object.super_class (sys_id)
+        return this._expandToExtendedTableSysIds(baseSysIds);
+    },
+
+    _getBaseTableSysIdsWithJournalFields: function() {
+        var names = {};
+        var grD = this._getMetaGR('sys_dictionary');
+        grD.addQuery('active', true);
+        grD.addQuery('internal_type', 'IN', 'journal_input');
+        grD.query();
+        while (grD.next()) {
+            names[grD.getValue('name')] = true;
+        }
+
+        var nameList = Object.keys(names);
+        var baseSysIds = [];
+
+        if (!nameList.length) return baseSysIds;
+
+        var grObj = this._getMetaGR('sys_db_object');
+        grObj.addQuery('name', 'IN', nameList.join(','));
+        grObj.query();
+        while (grObj.next()) {
+            baseSysIds.push(grObj.getUniqueValue()); // sys_id
+        }
+
+        return baseSysIds;
+    },
+
+    _expandToExtendedTableSysIds: function(baseSysIds) {
+        var result = {};
+        var queue = [];
+
+        for (var i = 0; i < baseSysIds.length; i++) {
+            var id = baseSysIds[i];
+            if (!id) continue;
+            result[id] = true;
+            queue.push(id);
+        }
+
+        // Build super_sys_id -> [child_sys_id] adjacency
+        var childrenBySuper = {};
+        var grObj = this._getMetaGR('sys_db_object');
+        grObj.addNotNullQuery('super_class');
+        grObj.query();
+        while (grObj.next()) {
+            var supId = grObj.getValue('super_class'); // sys_id
+            var childId = grObj.getUniqueValue(); // sys_id
+            if (!childrenBySuper[supId]) childrenBySuper[supId] = [];
+            childrenBySuper[supId].push(childId);
+        }
+
+        // BFS on sys_ids
+        while (queue.length) {
+            var parentId = queue.shift();
+            var kids = childrenBySuper[parentId] || [];
+            for (var k = 0; k < kids.length; k++) {
+                var childId = kids[k];
+                if (!result[childId]) {
+                    result[childId] = true;
+                    queue.push(childId);
+                }
+            }
+        }
+
+        return result;
+    },
+
+    /**
+     * Returns displayField/searchFields/defaultQuery for sn-record-picker for a table.
+     * Best-effort field ACL respect when secure lookup is enabled.
+     */
+    getRecordPickerMeta: function(tableName) {
+        this._assertCanUse();
+
+        tableName = (tableName || '').toString().trim();
+        if (!tableName) return {
+            ok: false,
+            error: 'No table provided.'
+        };
+        if (!this._isValidTable(tableName)) return {
+            ok: false,
+            error: 'Invalid table.'
+        };
+
+        // 1) Use dictionary display field (inherited-aware)
+        var displayField = this._getDisplayFieldFromDictionary(tableName);
+
+        // 2) Fallbacks (only if no display field defined)
+        if (!displayField) {
+            if (this._fieldExists(tableName, 'number')) displayField = 'number';
+            else if (this._fieldExists(tableName, 'name')) displayField = 'name';
+            else if (this._fieldExists(tableName, 'short_description')) displayField = 'short_description';
+            else displayField = 'sys_id';
+        }
+
+        // Search fields: display field + common extras if they exist
+        var candidates = [displayField, 'number', 'name', 'short_description'];
+        var searchFields = this._dedupeValidFields(tableName, candidates);
+
+        // If secure lookup is enabled, respect field ACL best-effort
+        var cfg = this.getConfig();
+        if (cfg.useSecureLookup) {
+            var grAny = new GlideRecordSecure(tableName);
+            grAny.setLimit(1);
+            grAny.query();
+            if (grAny.next()) {
+                searchFields = this._filterFieldsReadableOnRecord(grAny, searchFields);
+                if (searchFields.indexOf(displayField) < 0) displayField = 'sys_id';
+            }
+        }
+
+        return {
+            ok: true,
+            displayField: displayField,
+            searchFields: searchFields.join(','),
+            defaultQuery: '',
+            placeholder: 'Search ' + tableName + '...'
+        };
+    },
+
+    /**
+     * Get journal bundle (fields + entries) for a specific record
+     */
+    getJournalBundle: function(tableName, recordSysId) {
+        this._assertCanUse();
+
+        tableName = (tableName || '').toString().trim();
+        recordSysId = (recordSysId || '').toString().trim();
+
+        if (!this._isValidTable(tableName)) return {
+            ok: false,
+            error: 'Invalid table.'
+        };
+        if (!this._isValidSysId(recordSysId)) return {
+            ok: false,
+            error: 'Invalid record sys_id.'
+        };
+
+        var cfg = this.getConfig();
+        var grTarget = cfg.useSecureLookup ? new GlideRecordSecure(tableName) : new GlideRecord(tableName);
+        if (!grTarget.get(recordSysId)) {
+            return {
+                ok: false,
+                error: 'Record not found or not accessible.'
+            };
+        }
+
+        // Get journal fields for this table INCLUDING inherited fields,
+        // then filter by field-level read ACL on this record (if secure lookup enabled).
+        var journalFields = this._getJournalFieldsForTableHierarchy(tableName);
+        if (cfg.useSecureLookup) {
+            journalFields = this._filterJournalFieldsReadableOnRecord(grTarget, journalFields);
+        }
+
+        var entriesByField = this._getJournalEntriesByField(tableName, recordSysId, journalFields);
+
+        return {
+            ok: true,
+            table: tableName,
+            sys_id: recordSysId,
+            displayValue: grTarget.getDisplayValue(),
+            journalFields: journalFields,
+            entriesByField: entriesByField
+        };
+    },
+
+    _getJournalFieldsForTableHierarchy: function(tableName) {
+        // Build hierarchy: table -> parents...
+        var chain = this._getTableHierarchy(tableName);
+        if (!chain.length) chain = [tableName];
+
+        // Pull journal fields across chain; prefer child definitions first
+        var byElement = {};
+        var ordered = [];
+
+        // query dictionary for names IN chain
+        var grD = this._getMetaGR('sys_dictionary');
+        grD.addQuery('active', true);
+        grD.addQuery('internal_type', 'IN', 'journal_input');
+        grD.addQuery('name', 'IN', chain.join(','));
+        grD.orderBy('position');
+        grD.query();
+
+        while (grD.next()) {
+            var element = grD.getValue('element');
+            if (!element) continue;
+
+            // if element already recorded (from child), skip parent duplicate
+            if (byElement[element]) continue;
+
+            byElement[element] = true;
+            ordered.push({
+                name: element,
+                label: grD.getValue('column_label') || element
+            });
+        }
+
+        return ordered;
+    },
+
+    _filterJournalFieldsReadableOnRecord: function(grTarget, journalFields) {
+        var out = [];
+        for (var i = 0; i < journalFields.length; i++) {
+            var f = journalFields[i];
+            if (!f || !f.name) continue;
+
+            try {
+                var el = grTarget.getElement(f.name);
+                if (el && el.canRead()) out.push(f);
+            } catch (e) {
+                // ignore unreadable/invalid element
+            }
+        }
+        return out;
+    },
+
+    _getJournalEntriesByField: function(tableName, recordSysId, journalFields) {
+        var map = {};
+        for (var i = 0; i < journalFields.length; i++) {
+            map[journalFields[i].name] = [];
+        }
+
+        var grJ = new GlideRecord('sys_journal_field');
+        grJ.addQuery('name', tableName);
+        grJ.addQuery('element_id', recordSysId);
+        grJ.orderByDesc('sys_created_on');
+        grJ.query();
+
+        var userDisplayCache = {};
+
+        while (grJ.next()) {
+            var element = grJ.getValue('element');
+            if (!map.hasOwnProperty(element)) continue;
+
+            var createdBy = grJ.getValue('sys_created_by');
+            var createdByDisplay = this._getUserDisplay(createdBy, userDisplayCache);
+
+            map[element].push({
+                journal_sys_id: grJ.getUniqueValue(),
+                field: element,
+                value: grJ.getValue('value') || '',
+                created_on: grJ.getValue('sys_created_on'),
+                created_on_display: grJ.getDisplayValue('sys_created_on'),
+                created_by: createdBy,
+                created_by_display: createdByDisplay
+            });
+        }
+
+        return map;
+    },
+
+    /**
+     * Perform action - delegates to global script include
+     */
+    performAction: function(payload) {
+        this._assertCanUse();
+
+        try {
+            var globalSvc = new global.JahBlessGlobalJournalAdmin();
+            return globalSvc.perform(payload);
+        } catch (e) {
+            return {
+                ok: false,
+                error: (e + '')
+            };
+        }
+    },
+
+    /* -------------------------
+     * Helper functions
+     * ------------------------- */
+
+    _getMetaGR: function(tableName) {
+        var cfg = this.getConfig();
+        return cfg.useSecureLookup ? new GlideRecordSecure(tableName) : new GlideRecord(tableName);
+    },
+
+    _isValidTable: function(t) {
+        t = (t || '').toString().trim();
+        if (!t) return false;
+
+        var grObj = this._getMetaGR('sys_db_object');
+        grObj.addQuery('name', t);
+        grObj.setLimit(1);
+        grObj.query();
+        return grObj.next();
+    },
+
+    _isValidSysId: function(s) {
+        return /^[0-9a-f]{32}$/i.test((s || '').toString());
+    },
+
+    _getDisplayFieldFromDictionary: function(tableName) {
+        var chain = this._getTableHierarchy(tableName);
+        if (!chain.length) chain = [tableName];
+
+        // Prefer closest table in chain (child first)
+        for (var i = 0; i < chain.length; i++) {
+            var name = chain[i];
+
+            var grD = this._getMetaGR('sys_dictionary');
+            grD.addQuery('name', name);
+            grD.addQuery('display', true);
+            grD.addQuery('active', true);
+            grD.setLimit(1);
+            grD.query();
+            if (grD.next()) return grD.getValue('element');
+        }
+
+        return '';
+    },
+
+    _fieldExists: function(tableName, element) {
+        var chain = this._getTableHierarchy(tableName);
+        if (!chain.length) chain = [tableName];
+
+        for (var i = 0; i < chain.length; i++) {
+            var grD = this._getMetaGR('sys_dictionary');
+            grD.addQuery('name', chain[i]);
+            grD.addQuery('element', element);
+            grD.addQuery('active', true);
+            grD.setLimit(1);
+            grD.query();
+            if (grD.next()) return true;
+        }
+
+        return false;
+    },
+
+    _dedupeValidFields: function(tableName, fields) {
+        var seen = {};
+        var out = [];
+        for (var i = 0; i < fields.length; i++) {
+            var f = (fields[i] || '').toString().trim();
+            if (!f || seen[f]) continue;
+
+            if (f === 'sys_id' || this._fieldExists(tableName, f)) {
+                seen[f] = true;
+                out.push(f);
+            }
+        }
+        return out;
+    },
+
+    _filterFieldsReadableOnRecord: function(gr, fields) {
+        var out = [];
+        for (var i = 0; i < fields.length; i++) {
+            var f = fields[i];
+            if (f === 'sys_id') {
+                out.push(f);
+                continue;
+            }
+            try {
+                var el = gr.getElement(f);
+                if (el && el.canRead()) out.push(f);
+            } catch (e) {}
+        }
+        return out;
+    },
+
+    _getTableHierarchy: function(tableName) {
+        var chain = [];
+        var visited = {};
+        var currentName = (tableName || '').toString().trim();
+
+        while (currentName && !visited[currentName]) {
+            visited[currentName] = true;
+            chain.push(currentName);
+
+            // lookup this table's sys_db_object to get super_class sys_id
+            var grObj = this._getMetaGR('sys_db_object');
+            grObj.addQuery('name', currentName);
+            grObj.setLimit(1);
+            grObj.query();
+            if (!grObj.next()) break;
+
+            var parentId = grObj.getValue('super_class'); // sys_id
+            if (!parentId) break;
+
+            // resolve parent sys_id -> parent table name
+            var grParent = this._getMetaGR('sys_db_object');
+            grParent.addQuery('sys_id', parentId);
+            grParent.setLimit(1);
+            grParent.query();
+            if (!grParent.next()) break;
+
+            currentName = grParent.getValue('name');
+        }
+
+        return chain; // [child, parent, grandparent...]
+    },
+
+    _getUserDisplay: function(userName, cache) {
+        userName = (userName || '').toString();
+        if (!userName) return '';
+        if (cache[userName]) return cache[userName];
+
+        var grU = new GlideRecord('sys_user');
+        grU.addQuery('user_name', userName);
+        grU.setLimit(1);
+        grU.query();
+        if (grU.next()) {
+            cache[userName] = grU.getDisplayValue();
+            return cache[userName];
+        }
+
+        cache[userName] = userName;
+        return userName;
+    },
+
+    type: 'JournalAdminService'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 12:09:52</sys_created_on>
+        <sys_id>2d58a598333a36105a6b0ff13d5c7bad</sys_id>
+        <sys_mod_count>13</sys_mod_count>
+        <sys_name>JournalAdminService</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_update_name>sys_script_include_2d58a598333a36105a6b0ff13d5c7bad</sys_update_name>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 15:27:11</sys_updated_on>
+    </sys_script_include>
+</record_update>

@@ -1,0 +1,2513 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[function clientScript($scope, spUtil, $timeout, $uibModal, $sce) {
+	var c = this;
+
+	// =============================================
+	// INITIALIZATION
+	// =============================================
+	c.dataView = {
+		bundle: null,
+		selected: {},
+		selectedList: []
+	};
+
+	c.ui = {
+		isLocked: false,
+		busyText: '',
+		error: '',
+		message: '',
+		activeTab: 0,
+		tableField: { name: 'table', value: '', displayValue: '' },
+		recordField: { name: 'record', value: '', displayValue: '' },
+		showRecordPicker: true
+	};
+
+	c.data.recDispCol = "sys_id";
+	c.data.recSearchCols = "sys_id";
+	c.data.recQuery = "";
+	c.data.recPlaceholder = "Pick a record";
+
+	// =============================================
+	// HELPER: Get entry count for a field
+	// =============================================
+	c.getEntryCount = function(fieldName) {
+		if (!c.dataView.bundle || !c.dataView.bundle.entriesByField) return 0;
+		var entries = c.dataView.bundle.entriesByField[fieldName] || [];
+		return entries.length;
+	};
+
+	// =============================================
+	// TABLE PICKED
+	// =============================================
+	c.onTablePicked = function () {
+		c.ui.error = '';
+		c.ui.message = '';
+		c.ui.recordField = { name: 'record', value: '', displayValue: '' };
+		c.dataView.bundle = null;
+		c.dataView.selected = {};
+		c.dataView.selectedList = [];
+		c._stopWatch();
+
+		if (!c.ui.tableField.value) return;
+
+		c.ui.showRecordPicker = false;
+
+		c.server.get({ action: 'get_record_picker_config', table: c.ui.tableField.value })
+			.then(function (rsp) {
+				var cfg = rsp.data && rsp.data.recordPickerConfig;
+				if (!cfg || !cfg.ok) {
+					c.ui.error = (cfg && cfg.error) || 'Failed to load record picker config.';
+					return;
+				}
+				c.data.recDispCol = (cfg.displayField || 'sys_id'); 
+				c.data.recSearchCols = (cfg.searchFields || c.data.recDispCol);
+				c.data.recQuery = (cfg.defaultQuery || '');
+				c.data.recPlaceholder = cfg.placeholder || ('Search ' + c.ui.tableField.value + '...');
+			})
+			.finally(function () {
+				$timeout(function () {
+					c.ui.showRecordPicker = true;
+				}, 0);
+			});
+	};
+
+	// =============================================
+	// RECORD PICKED
+	// =============================================
+	c.onRecordPicked = function () {
+		if (!c.ui.tableField.value || !c.ui.recordField.value) return;
+		c.refreshBundle(true);
+	};
+
+	c.refreshBundle = function (startWatch) {
+		c._setBusy(true, 'Loading journal entries...');
+		c.server.get({ action: 'get_bundle', table: c.ui.tableField.value, sys_id: c.ui.recordField.value })
+			.then(function (rsp) {
+				c.dataView.bundle = rsp.data.bundle;
+				c._fieldLabelByName = {};
+				(c.dataView.bundle.journalFields || []).forEach(function(jf){
+					c._fieldLabelByName[jf.name] = jf.label;
+				});
+
+				if (!c.dataView.bundle || !c.dataView.bundle.ok) {
+					c.ui.error = (c.dataView.bundle && c.dataView.bundle.error) || 'Failed to load journal entries.';
+					c.dataView.bundle = null;
+					c._stopWatch();
+					return;
+				}
+				if (startWatch) c._startWatch();
+			})
+			.finally(function () {
+				c._setBusy(false);
+			});
+	};
+
+	// =============================================
+	// SELECTION
+	// =============================================
+	c.toggleSelect = function (entry) {
+		if (c.ui.isLocked) return;
+		if (!entry || !entry.journal_sys_id) return;
+
+		var id = entry.journal_sys_id;
+		c.dataView.selected[id] = !c.dataView.selected[id];
+		c._rebuildSelectedList();
+	};
+
+	c._rebuildSelectedList = function () {
+		var out = [];
+		if (!c.dataView.bundle || !c.dataView.bundle.entriesByField) {
+			c.dataView.selectedList = [];
+			return;
+		}
+
+		var byField = c.dataView.bundle.entriesByField;
+		Object.keys(byField).forEach(function (field) {
+			(byField[field] || []).forEach(function (e) {
+				if (c.dataView.selected[e.journal_sys_id]) {
+					out.push({
+						journal_sys_id: e.journal_sys_id,
+						field: e.field,
+						field_label: (c._fieldLabelByName && c._fieldLabelByName[e.field]) || e.field,
+						created_on: e.created_on,
+						created_on_display: e.created_on_display,
+						created_by_display: e.created_by_display || e.created_by,
+						value: e.value
+					});
+				}
+			});
+		});
+
+		c.dataView.selectedList = out;
+	};
+
+	// =============================================
+	// ACTIONS
+	// =============================================
+	c.canChooseAction = function () {
+		return !c.ui.isLocked &&
+			!!c.ui.tableField.value &&
+			!!c.ui.recordField.value &&
+			(c.dataView.selectedList.length > 0);
+	};
+
+	c.selectAction = function(action) {
+		if (!c.canChooseAction()) return;
+
+		if (action === 'redact_partial') {
+			c._openRedactSpecificModal().then(function(result) {
+				if (!result) return;
+				c._runAction('redact_partial', result.redactMap, result.reason);
+			});
+			return;
+		}
+
+		c._openConfirmModal(action).then(function(reason) {
+			if (!reason) return;
+			c._runAction(action, {}, reason);
+		});
+	};
+
+	// =============================================
+	// CONFIRM MODAL
+	// =============================================
+	c._openConfirmModal = function(action) {
+		var modal = $uibModal.open({
+			animation: true,
+			backdrop: 'static',
+			keyboard: true,
+			size: 'lg',
+			controllerAs: 'm',
+			templateUrl: 'jahbless-confirm-modal',
+			windowClass: 'jahbless-modal',
+			controller: function($uibModalInstance) {
+				var m = this;
+				m.action = action;
+				m.actionLabel = c._actionLabel(action);
+				m.count = c.dataView.selectedList.length;
+				m.tableLabel = c.ui.tableField.displayValue || c.ui.tableField.value;
+				m.recordLabel = c.ui.recordField.displayValue || c.ui.recordField.value;
+
+				m.byField = {};
+				c.dataView.selectedList.forEach(function(it){
+					var key = it.field;
+					if (!m.byField[key]) m.byField[key] = { label: it.field_label || key, items: [] };
+					m.byField[key].items.push(it);
+				});
+				m.fieldKeys = Object.keys(m.byField);
+
+				m.reason = '';
+				m.showError = false;
+
+				m.cancel = function() { $uibModalInstance.dismiss('cancel'); };
+				m.confirm = function() {
+					if (!m.reason || !m.reason.trim()) { 
+						m.showError = true; 
+						return; 
+					}
+					$uibModalInstance.close(m.reason.trim());
+				};
+			}
+		});
+
+		return modal.result.then(
+			function(reason) { return reason; }, 
+			function() { return null; }
+		);
+	};
+
+	// =============================================
+	// REDACT SPECIFIC MODAL
+	// =============================================
+	c._openRedactSpecificModal = function() {
+		var selected = c.dataView.selectedList.slice(0);
+
+		var modal = $uibModal.open({
+			animation: true,
+			backdrop: 'static',
+			keyboard: true,
+			size: 'lg',
+			controllerAs: 'm',
+			templateUrl: 'jahbless-redact-modal',
+			windowClass: 'jahbless-modal',
+			controller: function($uibModalInstance, $timeout) {
+				var m = this;
+				m.tableLabel = c.ui.tableField.displayValue || c.ui.tableField.value;
+				m.recordLabel = c.ui.recordField.displayValue || c.ui.recordField.value;
+
+				m.items = selected.map(function(s, idx){
+					return {
+						idx: idx,
+						journal_sys_id: s.journal_sys_id,
+						field: s.field,
+						field_label: s.field_label || s.field,
+						created_on_display: s.created_on_display,
+						created_on: s.created_on,
+						created_by_display: s.created_by_display,
+						value: s.value || '',
+						displayHTML: $sce.trustAsHtml((s.value || '').replace(/\n/g, '<br>')),
+						target: '',
+						showError: false,
+						marker: null
+					};
+				});
+
+				m.reason = '';
+				m.reasonError = false;
+
+				m.cancel = function(){ $uibModalInstance.dismiss('cancel'); };
+
+				m.clearSelection = function(item) {
+					item.target = '';
+					item.showError = false;
+					if (item.marker) {
+						item.marker.unmark();
+					}
+					item.displayHTML = $sce.trustAsHtml((item.value || '').replace(/\n/g, '<br>'));
+				};
+
+				m.confirm = function() {
+					m.reasonError = !m.reason || !m.reason.trim();
+
+					var anyMissing = false;
+					m.items.forEach(function(it){
+						if (!it.target || !it.target.trim()) { 
+							it.showError = true; 
+							anyMissing = true; 
+						}
+					});
+
+					if (m.reasonError || anyMissing) return;
+
+					var redactMap = {};
+					m.items.forEach(function(it){
+						redactMap[it.journal_sys_id] = { mode: 'partial', target: it.target };
+					});
+
+					$uibModalInstance.close({
+						reason: m.reason.trim(),
+						redactMap: redactMap
+					});
+				};
+
+				// Setup text selection with Mark.js
+				$timeout(function(){
+					m.items.forEach(function(item) {
+						var viewer = document.getElementById('redact_viewer_' + item.idx);
+						if (!viewer) return;
+
+						var content = viewer.querySelector('.viewer-content');
+						if (!content) return;
+
+						// Check if Mark is available
+						if (typeof Mark !== 'undefined') {
+							item.marker = new Mark(content);
+
+							content.addEventListener('mouseup', function() {
+								var selection = window.getSelection();
+								if (!selection || selection.rangeCount === 0) return;
+
+								var selectedText = selection.toString().trim();
+								if (selectedText && selectedText.length > 0) {
+									$timeout(function() {
+										item.target = selectedText;
+										item.showError = false;
+
+										item.marker.unmark({
+											done: function() {
+												item.marker.mark(selectedText, {
+													className: 'redact-mark',
+													accuracy: 'exactly'
+												});
+											}
+										});
+									});
+								}
+							});
+						} else {
+							// Fallback if Mark.js not loaded
+							content.addEventListener('mouseup', function() {
+								var selection = window.getSelection();
+								if (!selection || selection.rangeCount === 0) return;
+
+								var selectedText = selection.toString().trim();
+								if (selectedText) {
+									$timeout(function() {
+										item.target = selectedText;
+										item.showError = false;
+									});
+								}
+							});
+						}
+					});
+				}, 300);
+			}
+		});
+
+		return modal.result.then(
+			function(res){ return res; }, 
+			function(){ return null; }
+		);
+	};
+
+	c._actionLabel = function (action) {
+		if (action === 'delete') return 'deleted';
+		if (action === 'redact_full') return 'redacted in full';
+		if (action === 'redact_partial') return 'partially redacted';
+		return action;
+	};
+
+	c._runAction = function (action, redactMap, reason) {
+		var payload = {
+			action: action,
+			table: c.ui.tableField.value,
+			sys_id: c.ui.recordField.value,
+			reason: (reason || '').trim(),
+			selected: c.dataView.selectedList,
+			redactMap: redactMap || {}
+		};
+
+		c._setBusy(true, 'Processing: ' + action + ' ...');
+
+		c.server.get({ action: 'perform', payload: payload })
+			.then(function (rsp) {
+				var res = rsp.data.actionResult;
+				if (!res || !res.ok) {
+					c.ui.error = (res && res.error) || 'Action failed.';
+					return;
+				}
+
+				c.ui.message = 'Action completed successfully.';
+				c.ui.error = '';
+
+				$timeout(function () {
+					c.ui.message = '';
+				}, 3500);
+
+				if (rsp.data.bundle && rsp.data.bundle.ok) c.dataView.bundle = rsp.data.bundle;
+
+				c.dataView.selected = {};
+				c.dataView.selectedList = [];
+			})
+			.finally(function () {
+				c._setBusy(false);
+			});
+	};
+
+	// =============================================
+	// RECORD WATCH
+	// =============================================
+	c._watchDereg = null;
+
+	c._startWatch = function () {
+		c._stopWatch();
+		if (!c.ui.tableField.value || !c.ui.recordField.value) return;
+
+		var encoded = 'name=' + c.ui.tableField.value + '^element_id=' + c.ui.recordField.value;
+
+		c._watchDereg = spUtil.recordWatch($scope, 'sys_journal_field', encoded, function () {
+			c.dataView.selected = {};
+			c.dataView.selectedList = [];
+			c.server.get({ action: 'get_bundle', table: c.ui.tableField.value, sys_id: c.ui.recordField.value })
+				.then(function (rsp) {
+					if (rsp.data.bundle && rsp.data.bundle.ok) c.dataView.bundle = rsp.data.bundle;
+				});
+		});
+	};
+
+	c._stopWatch = function () {
+		if (typeof c._watchDereg === 'function') {
+			c._watchDereg();
+			c._watchDereg = null;
+		}
+	};
+
+	c._setBusy = function (locked, text) {
+		c.ui.isLocked = !!locked;
+		c.ui.busyText = text || '';
+	};
+}]]></client_script>
+        <controller_as>c</controller_as>
+        <css>/* ============================================
+   JOURNAL ADMIN WIDGET - CLEAN CSS
+   Classes applied directly in templates
+   ============================================ */
+
+/* Base Widget */
+.jahbless {
+  position: relative;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.jahbless.is-locked {
+  pointer-events: none;
+}
+
+.jahbless::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  z-index: -1;
+}
+
+/* Hero Section */
+.jahbless-hero {
+  background: linear-gradient(135deg, #2d3561 0%, #3b4a8c 50%, #4a6fa5 100%);
+  border-radius: 16px;
+  padding: 32px 40px;
+  margin-bottom: 32px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  color: white;
+}
+
+.jahbless-hero__title .h3 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: white;
+}
+
+.jahbless-hero__sub {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 15px;
+}
+
+/* Cards */
+.jahbless-card {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  margin-bottom: 24px;
+  transition: box-shadow 0.2s ease;
+}
+
+.jahbless-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.jahbless-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 28px;
+  border-bottom: 2px solid #f7fafc;
+}
+
+.jahbless-card__head strong {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.jahbless-card__body {
+  padding: 28px;
+}
+
+/* Form Labels &amp; Inputs */
+.jahbless-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.jahbless sn-record-picker input,
+.jahbless .form-control {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.jahbless sn-record-picker input:focus,
+.jahbless .form-control:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.jahbless-placeholder {
+  padding: 12px 16px;
+  background: #f7fafc;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  color: #a0aec0;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* Tabs with Badge Counts */
+.jahbless-tabs .nav-tabs {
+  border: none;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #f7fafc;
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+
+.jahbless-tabs .nav-tabs &gt; li {
+  flex: 1;
+  margin: 0;
+}
+
+.jahbless-tabs .nav-tabs &gt; li &gt; a {
+  border: none;
+  background: transparent;
+  color: #718096;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  text-align: center;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.jahbless-tabs .nav-tabs &gt; li.active &gt; a {
+  background: white;
+  color: #2d3748;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.jahbless-tabs .nav-tabs &gt; li &gt; a:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #4a5568;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  background: #e2e8f0;
+  color: #4a5568;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.jahbless-tabs .nav-tabs &gt; li.active &gt; a .tab-badge {
+  background: #667eea;
+  color: white;
+}
+
+/* Journal Entries */
+.jahbless-entrylist {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jahbless-entry {
+  position: relative;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  padding-right: 50px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  background: white;
+}
+
+.jahbless-entry:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.jahbless-entry.selected {
+  border-color: #667eea;
+  background: #f7faff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.jahbless-entry__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.jahbless-entry__head strong {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 15px;
+}
+
+.jahbless-entry__body {
+  padding: 12px 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  color: #4a5568;
+  line-height: 1.6;
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  border: 1px solid #e2e8f0;
+}
+
+.jahbless-entry::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #cbd5e0;
+  border-radius: 4px;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.jahbless-entry.selected::after {
+  background: #667eea;
+  border-color: #667eea;
+  content: '✓';
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.jahbless-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: #a0aec0;
+  font-size: 15px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 2px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Action Buttons */
+.jahbless-btn {
+  padding: 14px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.jahbless-btn:last-child {
+  margin-bottom: 0;
+}
+
+.jahbless-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger.jahbless-btn {
+  background: #fc8181;
+  color: white;
+  box-shadow: 0 2px 8px rgba(252, 129, 129, 0.3);
+}
+
+.btn-danger.jahbless-btn:hover:not(:disabled) {
+  background: #f56565;
+  box-shadow: 0 4px 12px rgba(252, 129, 129, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-warning.jahbless-btn {
+  background: #f6ad55;
+  color: white;
+  box-shadow: 0 2px 8px rgba(246, 173, 85, 0.3);
+}
+
+.btn-warning.jahbless-btn:hover:not(:disabled) {
+  background: #ed8936;
+  box-shadow: 0 4px 12px rgba(246, 173, 85, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-primary.jahbless-btn {
+  background: #4299e1;
+  color: white;
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
+}
+
+.btn-primary.jahbless-btn:hover:not(:disabled) {
+  background: #3182ce;
+  box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Loading Overlay */
+.jahbless-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.jahbless-overlay__card {
+  background: white;
+  padding: 40px 60px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.jahbless-overlay__card i {
+  color: #667eea;
+  margin-bottom: 16px;
+}
+
+.jahbless-overlay__text {
+  color: #2d3748;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 16px;
+}
+
+/* Alerts */
+.jahbless .alert {
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  border: none;
+  font-size: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.jahbless .alert-danger {
+  background: #fff5f5;
+  color: #c53030;
+  border-left: 4px solid #fc8181;
+}
+
+.jahbless .alert-success {
+  background: #f0fff4;
+  color: #22543d;
+  border-left: 4px solid #48bb78;
+}
+
+/* ============================================
+   MODAL STYLING
+   ============================================ */
+
+/* Modal Wrapper */
+.jahbless-modal-wrapper {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Modal Header - Gradient */
+.jahbless-modal-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 28px 32px;
+  border-bottom: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.jahbless-modal-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.1) 100%);
+  pointer-events: none;
+}
+
+.jahbless-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+  color: white;
+}
+
+.jahbless-modal-title i {
+  font-size: 26px;
+  opacity: 0.9;
+}
+
+.jahbless-close {
+  color: white;
+  opacity: 0.8;
+  text-shadow: none;
+  font-size: 32px;
+  font-weight: 300;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.jahbless-close:hover {
+  opacity: 1;
+  transform: rotate(90deg);
+  color: white;
+}
+
+/* Modal Body */
+.jahbless-modal-body {
+  padding: 32px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fafbfc;
+}
+
+.jahbless-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.jahbless-modal-body::-webkit-scrollbar-track {
+  background: #f1f3f5;
+  border-radius: 5px;
+}
+
+.jahbless-modal-body::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 5px;
+}
+
+/* Modal Info Box */
+.jahbless-modal-info {
+  background: white;
+  padding: 20px 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  border-left: 4px solid #667eea;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  color: #718096;
+  min-width: 70px;
+  font-weight: 500;
+}
+
+/* Action Badge */
+.action-badge {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-badge.action-delete {
+  background: #fff5f5;
+  color: #c53030;
+}
+
+.action-badge.action-redact_full {
+  background: #fffaf0;
+  color: #c05621;
+}
+
+.action-badge.action-redact_partial {
+  background: #ebf8ff;
+  color: #2c5282;
+}
+
+/* Warning Box */
+.jahbless-warning-box {
+  background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+  padding: 16px 20px;
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border: 2px solid #fc8181;
+  box-shadow: 0 2px 8px rgba(252, 129, 129, 0.2);
+}
+
+.jahbless-warning-box i {
+  color: #c53030;
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.jahbless-warning-box div {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #742a2a;
+}
+
+.jahbless-warning-box strong {
+  font-weight: 700;
+}
+
+/* Instruction Box */
+.jahbless-instruction-box {
+  background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+  padding: 16px 20px;
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border: 2px solid #4299e1;
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.2);
+}
+
+.jahbless-instruction-box i {
+  color: #2c5282;
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.jahbless-instruction-box div {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #2c5282;
+}
+
+.jahbless-instruction-box strong {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Preview Section */
+.jahbless-preview-section {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.preview-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-header i {
+  color: #667eea;
+}
+
+/* Modal Tabs */
+.jahbless-modal-tabs .nav-tabs {
+  border: none;
+  background: #f7fafc;
+  padding: 4px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.jahbless-modal-tabs .nav-tabs &gt; li &gt; a {
+  border: none;
+  background: transparent;
+  color: #718096;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.jahbless-modal-tabs .nav-tabs &gt; li.active &gt; a {
+  background: white;
+  color: #2d3748;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Modal Entry List */
+.modal-entry-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.modal-entry {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.modal-entry:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
+}
+
+.modal-entry:last-child {
+  margin-bottom: 0;
+}
+
+.modal-entry-header {
+  margin-bottom: 10px;
+}
+
+.entry-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.entry-field-label {
+  background: #667eea;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.entry-author {
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.entry-timestamp {
+  color: #a0aec0;
+  font-size: 12px;
+}
+
+.modal-entry-content {
+  background: white;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Monaco, Consolas, monospace;
+  color: #4a5568;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+}
+
+/* Redact Items */
+.jahbless-redact-items {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.redact-item-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.redact-item-card:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.redact-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.redact-card-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+}
+
+.meta-divider {
+  color: #cbd5e0;
+}
+
+.meta-author,
+.meta-timestamp {
+  color: #718096;
+  font-size: 13px;
+}
+
+.redact-card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #48bb78;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.redact-card-status i {
+  font-size: 16px;
+}
+
+.redact-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Text Viewer */
+.redact-text-viewer {
+  background: #f7fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  margin-bottom: 16px;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  transition: all 0.2s ease;
+}
+
+.redact-text-viewer:hover {
+  border-color: #cbd5e0;
+  background: #edf2f7;
+}
+
+.viewer-content {
+  font-family: ui-monospace, SFMono-Regular, Monaco, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #2d3748;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  cursor: text;
+  user-select: text;
+}
+
+.viewer-content::selection {
+  background: #fef5e7;
+  color: #744210;
+}
+
+/* Mark.js Highlighting */
+mark.redact-mark {
+  background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
+  color: white;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(252, 129, 129, 0.3);
+}
+
+/* Redact Input Area */
+.redact-input-area {
+  margin-top: 16px;
+}
+
+.redact-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 8px;
+}
+
+.redact-label i {
+  color: #667eea;
+}
+
+.input-with-action {
+  position: relative;
+}
+
+.input-with-action input {
+  padding-right: 45px;
+}
+
+.input-with-action input.has-value {
+  border-color: #48bb78;
+  background: #f0fff4;
+}
+
+.input-with-action input.error-input,
+.error-input {
+  border-color: #fc8181;
+  background: #fff5f5;
+}
+
+.clear-input-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #a0aec0;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+  border-radius: 4px;
+}
+
+.clear-input-btn:hover {
+  color: #e53e3e;
+  background: #fff5f5;
+}
+
+/* Field Messages */
+.field-error,
+.field-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.field-error {
+  background: #fff5f5;
+  color: #c53030;
+  border-left: 3px solid #fc8181;
+}
+
+.field-error i {
+  color: #fc8181;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.field-success {
+  background: #f0fff4;
+  color: #22543d;
+  border-left: 3px solid #48bb78;
+}
+
+.field-success i {
+  color: #48bb78;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Reason Section */
+.jahbless-reason-section {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.reason-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 12px;
+}
+
+.reason-label i {
+  color: #667eea;
+  font-size: 16px;
+}
+
+.reason-textarea {
+  font-size: 14px;
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Modal Footer */
+.jahbless-modal-footer {
+  background: white;
+  padding: 20px 32px;
+  border-top: 2px solid #f7fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.jahbless-btn-cancel,
+.jahbless-btn-confirm {
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.jahbless-btn-cancel {
+  background: white;
+  border: 2px solid #e2e8f0;
+  color: #4a5568;
+}
+
+.jahbless-btn-cancel:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+  transform: translateY(-1px);
+}
+
+.jahbless-btn-confirm {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.jahbless-btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .jahbless {
+    padding: 20px 10px;
+  }
+
+  .jahbless-hero {
+    padding: 24px;
+  }
+
+  .jahbless-modal-body {
+    padding: 20px;
+  }
+
+  .redact-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Utility Classes */
+.text-danger {
+  color: #e53e3e;
+}
+
+.text-muted {
+  color: #a0aec0;
+}</css>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>journal-admin-hub-widget</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {
+  
+}]]></link>
+        <name>Journal Admin Hub Widget</name>
+        <option_schema/>
+        <public>false</public>
+        <roles/>
+        <script><![CDATA[(function () {
+	data.config = {};
+	data.canUse = false;
+	data.error = '';
+	data.tablePickerQuery = '';
+	data.bundle = null;
+	data.actionResult = null;
+
+	var svc = new JournalAdminService();
+	data.config = svc.getConfig();
+	data.canUse = svc.canUse();
+
+	if (!data.canUse) {
+		data.error = 'You are not authorized to use this widget.';
+		return;
+	}
+
+	// initial load
+	if (!input || !input.action) {
+		data.tablePickerQuery = svc.getTablePickerQuery();
+		return;
+	}
+
+	if (input.action === 'get_bundle') {
+		data.bundle = svc.getJournalBundle(input.table, input.sys_id);
+		return;
+	}
+
+	if (input.action === 'perform') {
+		// Clear existing session messages so we only capture *this* action's errors
+		try { gs.getSession().clearMessages(); } catch (e) {}
+
+		data.actionResult = svc.performAction(input.payload);
+
+		if (data.actionResult && data.actionResult.ok && input.payload && input.payload.table && input.payload.sys_id) {
+			data.bundle = svc.getJournalBundle(input.payload.table, input.payload.sys_id);
+		}
+		return;
+	}
+
+	if (input.action === 'get_record_picker_config') {
+		data.recordPickerConfig = svc.getRecordPickerMeta(input.table);
+		return;
+	}
+})();]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 12:11:34</sys_created_on>
+        <sys_id>ed286198333a36105a6b0ff13d5c7b7a</sys_id>
+        <sys_mod_count>31</sys_mod_count>
+        <sys_name>Journal Admin Hub Widget</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_update_name>sp_widget_ed286198333a36105a6b0ff13d5c7b7a</sys_update_name>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 17:07:04</sys_updated_on>
+        <template><![CDATA[<div class="jahbless" ng-if="c.data.canUse" ng-class="{'is-locked': c.ui.isLocked}">
+  <div class="jahbless-hero">
+    <div class="jahbless-hero__title">
+      <div class="h3 m-0">Journal Admin</div>
+      <div class="jahbless-hero__sub">Delete / redact journal entries with audit alignment</div>
+    </div>
+  </div>
+
+  <div class="alert alert-danger" ng-if="c.ui.error">{{c.ui.error}}</div>
+  <div class="alert alert-success" ng-if="c.ui.message && !c.ui.isLocked">{{c.ui.message}}</div>
+
+  <div class="jahbless-card">
+    <div class="jahbless-card__body">
+      <div class="row">
+        <div class="col-md-6">
+          <label class="jahbless-label">Table</label>
+          <sn-record-picker
+                            field="c.ui.tableField"
+                            table="'sys_db_object'"
+                            display-field="'label'"
+                            value-field="'name'"
+                            search-fields="'label,name'"
+                            default-query="c.data.tablePickerQuery"
+                            page-size="20"
+                            placeholder="Select a table..."
+                            on-change="c.onTablePicked()"
+                            sn-disabled="c.ui.isLocked">
+          </sn-record-picker>
+        </div>
+
+        <div class="col-md-6">
+          <label class="jahbless-label">Record</label>
+          <div ng-if="c.ui.tableField.value && c.ui.showRecordPicker">
+            <sn-record-picker
+                              field="c.ui.recordField"
+                              table="c.ui.tableField.value"
+                              display-field="c.data.recDispCol"
+                              value-field="'sys_id'"
+                              search-fields="c.data.recSearchCols"
+                              default-query="c.data.recQuery"
+                              page-size="20"
+                              placeholder="{{c.data.recPlaceholder}}"
+                              on-change="c.onRecordPicked()"
+                              sn-disabled="c.ui.isLocked">
+            </sn-record-picker>
+          </div>
+          <div class="jahbless-placeholder" ng-if="!c.ui.tableField.value">
+            Pick a table first.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Journal section -->
+  <div class="row" ng-if="c.dataView.bundle && c.dataView.bundle.ok" style="margin-top:14px;">
+    <div class="col-md-8">
+      <div class="jahbless-card">
+        <div class="jahbless-card__head">
+          <div><strong>Journal fields</strong></div>
+          <div class="text-muted small">Newest first • multi-select entries</div>
+        </div>
+
+        <div class="jahbless-card__body">
+          <uib-tabset active="c.ui.activeTab" class="jahbless-tabs">
+            <uib-tab ng-repeat="jf in c.dataView.bundle.journalFields track by jf.name">
+              <uib-tab-heading>
+                {{jf.label}}
+                <span class="tab-badge">{{c.getEntryCount(jf.name)}}</span>
+              </uib-tab-heading>
+              <div class="jahbless-entrylist">
+                <div class="jahbless-empty" ng-if="!(c.dataView.bundle.entriesByField[jf.name] || []).length">
+                  <i class="fa fa-inbox fa-2x" style="opacity: 0.3; margin-bottom: 8px;"></i>
+                  <div>No entries found.</div>
+                </div>
+
+                <div class="jahbless-entry"
+                     ng-repeat="e in c.dataView.bundle.entriesByField[jf.name] track by e.journal_sys_id"
+                     ng-class="{'selected': c.dataView.selected[e.journal_sys_id]}"
+                     ng-click="c.toggleSelect(e)">
+                  <div class="jahbless-entry__head">
+                    <div>
+                      <strong>{{e.created_by_display || e.created_by}}</strong>
+                      <span class="text-muted small">• {{e.created_on_display}}</span>
+                    </div>
+                  </div>
+                  <pre class="jahbless-entry__body">{{e.value}}</pre>
+                </div>
+              </div>
+            </uib-tab>
+          </uib-tabset>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="jahbless-card">
+        <div class="jahbless-card__head">
+          <div><strong>Actions</strong></div>
+          <div class="text-muted small">
+            <span ng-if="c.dataView.selectedList.length > 0">{{c.dataView.selectedList.length}} selected</span>
+            <span ng-if="c.dataView.selectedList.length === 0">No entries selected</span>
+          </div>
+        </div>
+
+        <div class="jahbless-card__body">
+          <div class="jahbless-empty" ng-if="c.dataView.selectedList.length === 0">
+            <i class="fa fa-hand-pointer-o fa-2x" style="opacity: 0.3; margin-bottom: 8px;"></i>
+            <div>Select one or more journal entries to begin.</div>
+          </div>
+
+          <div ng-if="c.dataView.selectedList.length > 0">
+            <button class="btn btn-danger btn-block jahbless-btn"
+                    ng-click="c.selectAction('delete')"
+                    ng-disabled="!c.canChooseAction()">
+              <i class="fa fa-trash-o"></i> Delete
+            </button>
+
+            <button class="btn btn-warning btn-block jahbless-btn"
+                    ng-click="c.selectAction('redact_full')"
+                    ng-disabled="!c.canChooseAction()">
+              <i class="fa fa-lock"></i> Redact in full
+            </button>
+
+            <button class="btn btn-primary btn-block jahbless-btn"
+                    ng-click="c.selectAction('redact_partial')"
+                    ng-disabled="!c.canChooseAction()">
+              <i class="fa fa-scissors"></i> Redact specific text
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="jahbless-overlay" ng-if="c.ui.isLocked">
+    <div class="jahbless-overlay__card">
+      <i class="fa fa-spinner fa-spin fa-2x"></i>
+      <div class="jahbless-overlay__text">{{c.ui.busyText || 'Working...'}}</div>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-danger" ng-if="!c.data.canUse">
+  {{c.data.error || 'Not authorized.'}}
+</div>
+
+<!-- ===================================== -->
+<!-- INLINE MODAL TEMPLATES WITH STYLES -->
+<!-- ===================================== -->
+
+<!-- Confirm Modal Template -->
+<script type="text/ng-template" id="jahbless-confirm-modal">
+  <style>
+    /* Modal-specific styles */
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+      padding: 28px 32px !important;
+      border-bottom: none !important;
+    }
+    
+    .modal-header .close {
+      color: white !important;
+      opacity: 0.8 !important;
+      text-shadow: none !important;
+      font-size: 32px !important;
+    }
+    
+    .modal-header .close:hover {
+      opacity: 1 !important;
+      transform: rotate(90deg);
+    }
+    
+    .modal-title {
+      color: white !important;
+      font-size: 24px !important;
+      font-weight: 700 !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+    }
+    
+    .modal-body {
+      background: #fafbfc !important;
+      padding: 32px !important;
+    }
+    
+    .jahbless-modal-info {
+      background: white;
+      padding: 20px 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    
+    .info-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .info-label {
+      color: #718096;
+      min-width: 70px;
+      font-weight: 500;
+    }
+    
+    .action-badge {
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .action-badge.action-delete {
+      background: #fff5f5;
+      color: #c53030;
+    }
+    
+    .action-badge.action-redact_full {
+      background: #fffaf0;
+      color: #c05621;
+    }
+    
+    .jahbless-warning-box {
+      background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+      padding: 16px 20px;
+      border-radius: 12px;
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      border: 2px solid #fc8181;
+    }
+    
+    .jahbless-warning-box i {
+      color: #c53030;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    
+    .jahbless-warning-box div {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #742a2a;
+    }
+    
+    .jahbless-preview-section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    
+    .preview-header {
+      font-size: 14px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .preview-header i {
+      color: #667eea;
+    }
+    
+    .jahbless-modal-tabs .nav-tabs {
+      border: none !important;
+      background: #f7fafc;
+      padding: 4px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .jahbless-modal-tabs .nav-tabs > li > a {
+      border: none !important;
+      background: transparent;
+      color: #718096;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    
+    .jahbless-modal-tabs .nav-tabs > li.active > a {
+      background: white !important;
+      color: #2d3748 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .modal-entry-list {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    
+    .modal-entry {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    
+    .modal-entry:hover {
+      background: #edf2f7;
+    }
+    
+    .entry-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+    
+    .entry-field-label {
+      background: #667eea;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    
+    .entry-author {
+      color: #2d3748;
+      font-weight: 600;
+    }
+    
+    .entry-timestamp {
+      color: #a0aec0;
+      font-size: 12px;
+    }
+    
+    .modal-entry-content {
+      background: white;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: monospace;
+      color: #4a5568;
+      white-space: pre-wrap;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .jahbless-reason-section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
+    }
+    
+    .reason-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 12px;
+    }
+    
+    .reason-label i {
+      color: #667eea;
+    }
+    
+    .reason-textarea {
+      font-size: 14px;
+      min-height: 100px;
+    }
+    
+    .error-input {
+      border-color: #fc8181 !important;
+      background: #fff5f5 !important;
+    }
+    
+    .field-error {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #fff5f5;
+      color: #c53030;
+      border-left: 3px solid #fc8181;
+    }
+    
+    .field-error i {
+      color: #fc8181;
+      flex-shrink: 0;
+    }
+    
+    .modal-footer {
+      background: white !important;
+      padding: 20px 32px !important;
+      border-top: 2px solid #f7fafc !important;
+      display: flex !important;
+      justify-content: flex-end !important;
+      gap: 12px !important;
+    }
+    
+    .modal-footer .btn {
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .modal-footer .btn-default {
+      background: white;
+      border: 2px solid #e2e8f0;
+      color: #4a5568;
+    }
+    
+    .modal-footer .btn-default:hover {
+      background: #f7fafc;
+      border-color: #cbd5e0;
+    }
+    
+    .modal-footer .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .modal-footer .btn-primary:hover {
+      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+    }
+  </style>
+
+  <div class="modal-header">
+    <button type="button" class="close" ng-click="m.cancel()" aria-label="Close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h4 class="modal-title">
+      <i class="fa fa-exclamation-triangle"></i>
+      Confirm Action
+    </h4>
+  </div>
+
+  <div class="modal-body">
+    <div class="jahbless-modal-info">
+      <div class="info-row">
+        <span class="info-label">Action:</span>
+        <strong class="action-badge action-{{m.action}}">{{m.actionLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Entries:</span>
+        <strong>{{m.count}} {{m.count === 1 ? 'entry' : 'entries'}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Table:</span>
+        <strong>{{m.tableLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Record:</span>
+        <strong>{{m.recordLabel}}</strong>
+      </div>
+    </div>
+
+    <div class="jahbless-warning-box">
+      <i class="fa fa-exclamation-circle"></i>
+      <div>
+        <strong>Warning:</strong> This action cannot be undone.
+        {{m.count}} {{m.count === 1 ? 'entry' : 'entries'}} will be <strong>{{m.actionLabel}}</strong>.
+      </div>
+    </div>
+
+    <div class="jahbless-preview-section">
+      <div class="preview-header">
+        <i class="fa fa-eye"></i> Affected Entries
+      </div>
+      <uib-tabset class="jahbless-modal-tabs">
+        <uib-tab ng-repeat="k in m.fieldKeys" heading="{{m.byField[k].label}} ({{m.byField[k].items.length}})">
+          <div class="modal-entry-list">
+            <div class="modal-entry" ng-repeat="it in m.byField[k].items track by it.journal_sys_id">
+              <div class="entry-meta">
+                <span class="entry-field-label">{{m.byField[k].label}}</span>
+                <strong class="entry-author">{{it.created_by_display}}</strong>
+                <span class="entry-timestamp">{{it.created_on_display}}</span>
+              </div>
+              <div class="modal-entry-content">{{it.value}}</div>
+            </div>
+          </div>
+        </uib-tab>
+      </uib-tabset>
+    </div>
+
+    <div class="jahbless-reason-section">
+      <label class="reason-label">
+        <i class="fa fa-comment-o"></i> Reason for Action
+        <span class="text-danger">*</span>
+      </label>
+      <textarea class="form-control reason-textarea" 
+                rows="3" 
+                ng-model="m.reason"
+                placeholder="Required: Explain why you are performing this action..."
+                ng-class="{'error-input': m.showError}"></textarea>
+      <div class="field-error" ng-if="m.showError">
+        <i class="fa fa-exclamation-circle"></i>
+        A reason is required to proceed.
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn btn-default btn-lg" ng-click="m.cancel()">
+      <i class="fa fa-times"></i> Cancel
+    </button>
+    <button class="btn btn-primary btn-lg" ng-click="m.confirm()">
+      <i class="fa fa-check"></i> Confirm
+    </button>
+  </div>
+</script>
+
+<!-- Redact Specific Modal Template -->
+<script type="text/ng-template" id="jahbless-redact-modal">
+  <style>
+    /* Same base modal styles */
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+      padding: 28px 32px !important;
+      border-bottom: none !important;
+    }
+    
+    .modal-header .close {
+      color: white !important;
+      opacity: 0.8 !important;
+      text-shadow: none !important;
+      font-size: 32px !important;
+    }
+    
+    .modal-title {
+      color: white !important;
+      font-size: 24px !important;
+      font-weight: 700 !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+    }
+    
+    .modal-body {
+      background: #fafbfc !important;
+      padding: 32px !important;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    
+    /* Redact-specific styles */
+    .jahbless-modal-info {
+      background: white;
+      padding: 20px 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .info-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    .info-label {
+      color: #718096;
+      min-width: 70px;
+      font-weight: 500;
+    }
+    
+    .jahbless-instruction-box {
+      background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+      padding: 16px 20px;
+      border-radius: 12px;
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      border: 2px solid #4299e1;
+    }
+    
+    .jahbless-instruction-box i {
+      color: #2c5282;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    
+    .jahbless-redact-items {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    
+    .redact-item-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    
+    .redact-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    .redact-card-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .field-badge {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 5px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    
+    .meta-divider {
+      color: #cbd5e0;
+    }
+    
+    .meta-author, .meta-timestamp {
+      color: #718096;
+      font-size: 13px;
+    }
+    
+    .redact-card-status {
+      color: #48bb78;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    
+    .redact-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #718096;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .redact-text-viewer {
+      background: #f7fafc;
+      padding: 16px;
+      border-radius: 8px;
+      border: 2px solid #e2e8f0;
+      margin-bottom: 16px;
+      min-height: 100px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .viewer-content {
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #2d3748;
+      white-space: pre-wrap;
+      cursor: text;
+      user-select: text;
+    }
+    
+    mark.redact-mark {
+      background: linear-gradient(135deg, #fc8181 0%, #f56565 100%);
+      color: white;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    
+    .redact-input-area {
+      margin-top: 16px;
+    }
+    
+    .redact-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 8px;
+    }
+    
+    .input-with-action {
+      position: relative;
+    }
+    
+    .input-with-action input {
+      padding-right: 45px;
+    }
+    
+    .input-with-action input.has-value {
+      border-color: #48bb78;
+      background: #f0fff4;
+    }
+    
+    .error-input {
+      border-color: #fc8181 !important;
+      background: #fff5f5 !important;
+    }
+    
+    .clear-input-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #a0aec0;
+      padding: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      border-radius: 4px;
+    }
+    
+    .clear-input-btn:hover {
+      color: #e53e3e;
+      background: #fff5f5;
+    }
+    
+    .field-error {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #fff5f5;
+      color: #c53030;
+      border-left: 3px solid #fc8181;
+    }
+    
+    .field-success {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #f0fff4;
+      color: #22543d;
+      border-left: 3px solid #48bb78;
+    }
+    
+    .jahbless-reason-section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
+    }
+    
+    .reason-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 12px;
+    }
+    
+    .reason-textarea {
+      font-size: 14px;
+      min-height: 100px;
+    }
+    
+    .modal-footer {
+      background: white !important;
+      padding: 20px 32px !important;
+      border-top: 2px solid #f7fafc !important;
+      display: flex !important;
+      justify-content: flex-end !important;
+      gap: 12px !important;
+    }
+    
+    .modal-footer .btn {
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .modal-footer .btn-default {
+      background: white;
+      border: 2px solid #e2e8f0;
+      color: #4a5568;
+    }
+    
+    .modal-footer .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+  </style>
+
+  <div class="modal-header">
+    <button type="button" class="close" ng-click="m.cancel()" aria-label="Close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h4 class="modal-title">
+      <i class="fa fa-scissors"></i>
+      Redact Specific Text
+    </h4>
+  </div>
+
+  <div class="modal-body">
+    <div class="jahbless-modal-info">
+      <div class="info-row">
+        <span class="info-label">Table:</span>
+        <strong>{{m.tableLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Record:</span>
+        <strong>{{m.recordLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Entries:</span>
+        <strong>{{m.items.length}}</strong>
+      </div>
+    </div>
+
+    <div class="jahbless-instruction-box">
+      <i class="fa fa-lightbulb-o"></i>
+      <div>
+        <strong>How to select text:</strong>
+        <ol style="margin: 8px 0 0 0; padding-left: 20px; line-height: 1.6;">
+          <li>Click and drag to highlight text in any entry below</li>
+          <li>Selected text will automatically appear in the input field</li>
+          <li>You can also type or paste text directly</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="jahbless-redact-items">
+      <div class="redact-item-card" ng-repeat="item in m.items track by item.journal_sys_id">
+        <div class="redact-card-header">
+          <div class="redact-card-info">
+            <span class="field-badge">{{item.field_label}}</span>
+            <span class="meta-divider">•</span>
+            <span class="meta-author">{{item.created_by_display}}</span>
+            <span class="meta-divider">•</span>
+            <span class="meta-timestamp">{{item.created_on_display}}</span>
+          </div>
+          <div class="redact-card-status" ng-if="item.target">
+            <i class="fa fa-check-circle"></i> Ready
+          </div>
+        </div>
+
+        <div class="redact-section-label">
+          <i class="fa fa-file-text-o"></i> Journal Entry Content
+        </div>
+
+        <div class="redact-text-viewer" id="redact_viewer_{{item.idx}}">
+          <div class="viewer-content" ng-bind-html="item.displayHTML"></div>
+        </div>
+
+        <div class="redact-input-area">
+          <label class="redact-label">
+            <i class="fa fa-scissors"></i> Text to Redact
+            <span class="text-danger">*</span>
+          </label>
+          <div class="input-with-action">
+            <input type="text" 
+                   class="form-control" 
+                   ng-model="item.target"
+                   placeholder="Select text above or type here..."
+                   ng-class="{'has-value': item.target, 'error-input': item.showError}">
+            <button type="button" 
+                    class="clear-input-btn" 
+                    ng-if="item.target"
+                    ng-click="m.clearSelection(item)"
+                    title="Clear">
+              <i class="fa fa-times"></i>
+            </button>
+          </div>
+          <div class="field-error" ng-if="item.showError">
+            <i class="fa fa-exclamation-circle"></i>
+            Please select or enter text to redact.
+          </div>
+          <div class="field-success" ng-if="item.target && !item.showError">
+            <i class="fa fa-check-circle"></i>
+            Will redact: "{{item.target | limitTo:60}}{{item.target.length > 60 ? '...' : ''}}"
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="jahbless-reason-section">
+      <label class="reason-label">
+        <i class="fa fa-comment-o"></i> Reason for Redaction
+        <span class="text-danger">*</span>
+      </label>
+      <textarea class="form-control reason-textarea" 
+                rows="3" 
+                ng-model="m.reason"
+                placeholder="Required: Explain why you are redacting this information (e.g., contains PII, sensitive data, etc.)"
+                ng-class="{'error-input': m.reasonError}"></textarea>
+      <div class="field-error" ng-if="m.reasonError">
+        <i class="fa fa-exclamation-circle"></i>
+        A reason is required to proceed with redaction.
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn btn-default btn-lg" ng-click="m.cancel()">
+      <i class="fa fa-times"></i> Cancel
+    </button>
+    <button class="btn btn-primary btn-lg" ng-click="m.confirm()">
+      <i class="fa fa-check"></i> Confirm Redaction
+    </button>
+  </div>
+</script>]]></template>
+    </sp_widget>
+</record_update>
