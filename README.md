@@ -47,7 +47,7 @@ ServiceNow:
 - System Update Sets → Retrieved Update Sets
 - Import Update Set from XML
 - Upload:
-  `update_sets/scoped/Journal_Administration_Hub_Bulk_Log_Entry_Sanitisation_Suite.xml`
+  `/scoped/Journal_Administration_Hub_Bulk_Log_Entry_Sanitisation_Suite.xml`
 - Preview Update Set
 - Commit Update Set
 
@@ -58,7 +58,7 @@ ServiceNow:
 - System Update Sets → Retrieved Update Sets
 - Import Update Set from XML
 - Upload:
-  `update_sets/global/JAHBLESS_Global.xml`
+  `/global/JAHBLESS_Global.xml`
 - Preview Update Set
 - Commit Update Set
 
