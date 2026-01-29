@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_scope_privilege">
+    <sys_scope_privilege action="DELETE">
+        <operation>delete</operation>
+        <source_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</source_scope>
+        <status>allowed</status>
+        <sys_class_name>sys_scope_privilege</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 14:25:39</sys_created_on>
+        <sys_id>07970e9833fa36105a6b0ff13d5c7be6</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>sys_journal_field</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_update_name>sys_scope_privilege_07970e9833fa36105a6b0ff13d5c7be6</sys_update_name>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 14:25:39</sys_updated_on>
+        <target_name>sys_journal_field</target_name>
+        <target_scope display_value="Global">global</target_scope>
+        <target_type>sys_db_object</target_type>
+    </sys_scope_privilege>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</application>
+        <file_path/>
+        <instance_id>235a28e4db4f03402b157236bf9619fe</instance_id>
+        <instance_name>crossfuzedemosvs2</instance_name>
+        <name>sys_scope_privilege_07970e9833fa36105a6b0ff13d5c7be6</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_scope_privilege"><sys_scope_privilege action="INSERT_OR_UPDATE"><operation>delete</operation><source_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</source_scope><status>allowed</status><sys_class_name>sys_scope_privilege</sys_class_name><sys_created_by>Michael.Herron@crossfuze.com</sys_created_by><sys_created_on>2026-01-28 14:25:39</sys_created_on><sys_id>07970e9833fa36105a6b0ff13d5c7be6</sys_id><sys_mod_count>0</sys_mod_count><sys_name>sys_journal_field</sys_name><sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package><sys_policy/><sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope><sys_update_name>sys_scope_privilege_07970e9833fa36105a6b0ff13d5c7be6</sys_update_name><sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by><sys_updated_on>2026-01-28 14:25:39</sys_updated_on><target_name>sys_journal_field</target_name><target_scope display_value="Global">global</target_scope><target_type>sys_db_object</target_type></sys_scope_privilege></record_update>]]></payload>
+        <payload_hash>1246233628</payload_hash>
+        <record_name>sys_journal_field</record_name>
+        <reverted_from/>
+        <source>f2b7e158333a36105a6b0ff13d5c7ba3</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 14:25:39</sys_created_on>
+        <sys_id>ffc742d833fa36105a6b0ff13d5c7bad</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19c04fee43e0000001</sys_recorded_at>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 14:25:39</sys_updated_on>
+        <type>Cross scope privilege</type>
+        <update_guid>bfc742d864fa3610138d9760aaf55aac</update_guid>
+        <update_guid_history>bfc742d864fa3610138d9760aaf55aac:1246233628</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete/>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 14:29:19</sys_created_on>
+        <sys_db_object display_value="" name="sys_scope_privilege">sys_scope_privilege</sys_db_object>
+        <sys_id>78851e5580c841b8996baffae5c6ba84</sys_id>
+        <sys_metadata>07970e9833fa36105a6b0ff13d5c7be6</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>sys_journal_field</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_scope_delete display_value="">0e9082ff173448648fd1eca1f6d05c90</sys_scope_delete>
+        <sys_update_name>sys_scope_privilege_07970e9833fa36105a6b0ff13d5c7be6</sys_update_name>
+        <sys_update_version display_value="sys_scope_privilege_07970e9833fa36105a6b0ff13d5c7be6">ffc742d833fa36105a6b0ff13d5c7bad</sys_update_version>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 14:29:19</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

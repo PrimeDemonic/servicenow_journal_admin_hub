@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_properties">
+    <sys_properties action="DELETE">
+        <choices/>
+        <description>If deleting a comment requires approval, who approves it</description>
+        <ignore_cache>true</ignore_cache>
+        <is_private>false</is_private>
+        <name>x_cros2_journal_0.delete_approval_group</name>
+        <read_roles/>
+        <suffix>delete_approval_group</suffix>
+        <sys_class_name>sys_properties</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 13:09:17</sys_created_on>
+        <sys_id>dd56b99c337a36105a6b0ff13d5c7b9b</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_cros2_journal_0.delete_approval_group</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_update_name>sys_properties_dd56b99c337a36105a6b0ff13d5c7b9b</sys_update_name>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 13:09:17</sys_updated_on>
+        <type>string</type>
+        <value>d836399c337a36105a6b0ff13d5c7b07</value>
+        <write_roles/>
+    </sys_properties>
+    <sys_translated_text action="DELETE" query="documentkey=dd56b99c337a36105a6b0ff13d5c7b9b"/>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</application>
+        <file_path/>
+        <instance_id>235a28e4db4f03402b157236bf9619fe</instance_id>
+        <instance_name>crossfuzedemosvs2</instance_name>
+        <name>sys_properties_dd56b99c337a36105a6b0ff13d5c7b9b</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_properties"><sys_properties action="INSERT_OR_UPDATE"><choices/><description>If deleting a comment requires approval, who approves it</description><ignore_cache>true</ignore_cache><is_private>false</is_private><name>x_cros2_journal_0.delete_approval_group</name><read_roles/><suffix>delete_approval_group</suffix><sys_class_name>sys_properties</sys_class_name><sys_created_by>Michael.Herron@crossfuze.com</sys_created_by><sys_created_on>2026-01-28 13:09:17</sys_created_on><sys_id>dd56b99c337a36105a6b0ff13d5c7b9b</sys_id><sys_mod_count>0</sys_mod_count><sys_name>x_cros2_journal_0.delete_approval_group</sys_name><sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package><sys_policy/><sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope><sys_update_name>sys_properties_dd56b99c337a36105a6b0ff13d5c7b9b</sys_update_name><sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by><sys_updated_on>2026-01-28 13:09:17</sys_updated_on><type>string</type><value>d836399c337a36105a6b0ff13d5c7b07</value><write_roles/></sys_properties><sys_translated_text action="delete_multiple" query="documentkey=dd56b99c337a36105a6b0ff13d5c7b9b"/></record_update>]]></payload>
+        <payload_hash>218073558</payload_hash>
+        <record_name>x_cros2_journal_0.delete_approval_group</record_name>
+        <reverted_from/>
+        <source>f2b7e158333a36105a6b0ff13d5c7ba3</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 13:09:18</sys_created_on>
+        <sys_id>5d56b99c337a36105a6b0ff13d5c7b9f</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19c04b8fc500000001</sys_recorded_at>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 13:09:18</sys_updated_on>
+        <type>System Property</type>
+        <update_guid>1d56b99c787a3610e010675f50c9e39e</update_guid>
+        <update_guid_history>1d56b99c787a3610e010675f50c9e39e:218073558</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete/>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 15:18:43</sys_created_on>
+        <sys_db_object display_value="" name="sys_properties">sys_properties</sys_db_object>
+        <sys_id>0a49c2c0e539451a87b667085e744629</sys_id>
+        <sys_metadata>dd56b99c337a36105a6b0ff13d5c7b9b</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_cros2_journal_0.delete_approval_group</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_scope_delete display_value="">0e9082ff173448648fd1eca1f6d05c90</sys_scope_delete>
+        <sys_update_name>sys_properties_dd56b99c337a36105a6b0ff13d5c7b9b</sys_update_name>
+        <sys_update_version display_value="sys_properties_dd56b99c337a36105a6b0ff13d5c7b9b">5d56b99c337a36105a6b0ff13d5c7b9f</sys_update_version>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 15:18:43</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

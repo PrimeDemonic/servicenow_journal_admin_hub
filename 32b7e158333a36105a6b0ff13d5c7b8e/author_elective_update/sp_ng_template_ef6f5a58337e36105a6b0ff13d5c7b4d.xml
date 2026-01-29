@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_ng_template">
+    <sp_ng_template action="DELETE">
+        <id>jahbless-confirm-modal</id>
+        <sp_widget display_value="Journal Admin Hub Widget">ed286198333a36105a6b0ff13d5c7b7a</sp_widget>
+        <sys_class_name>sp_ng_template</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 16:09:10</sys_created_on>
+        <sys_id>ef6f5a58337e36105a6b0ff13d5c7b4d</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name>jahbless-confirm-modal</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_update_name>sp_ng_template_ef6f5a58337e36105a6b0ff13d5c7b4d</sys_update_name>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 16:13:23</sys_updated_on>
+        <template><![CDATA[<div class="jahbless-modal-wrapper">
+  <div class="modal-header jahbless-modal-header">
+    <button type="button" class="close jahbless-close" ng-click="m.cancel()" aria-label="Close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h4 class="modal-title jahbless-modal-title">
+      <i class="fa fa-exclamation-triangle"></i>
+      Confirm Action
+    </h4>
+  </div>
+
+  <div class="modal-body jahbless-modal-body">
+    <div class="jahbless-modal-info">
+      <div class="info-row">
+        <span class="info-label">Action:</span>
+        <strong class="action-badge action-{{m.action}}">{{m.actionLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Entries:</span>
+        <strong>{{m.count}} {{m.count === 1 ? 'entry' : 'entries'}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Table:</span>
+        <strong>{{m.tableLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Record:</span>
+        <strong>{{m.recordLabel}}</strong>
+      </div>
+    </div>
+
+    <div class="jahbless-warning-box">
+      <i class="fa fa-exclamation-circle"></i>
+      <div>
+        <strong>Warning:</strong> This action cannot be undone.
+        {{m.count}} {{m.count === 1 ? 'entry' : 'entries'}} will be <strong>{{m.actionLabel}}</strong>.
+      </div>
+    </div>
+
+    <div class="jahbless-preview-section">
+      <div class="preview-header">
+        <i class="fa fa-eye"></i> Affected Entries
+      </div>
+      <uib-tabset class="jahbless-modal-tabs">
+        <uib-tab ng-repeat="k in m.fieldKeys" heading="{{m.byField[k].label}} ({{m.byField[k].items.length}})">
+          <div class="modal-entry-list">
+            <div class="modal-entry" ng-repeat="it in m.byField[k].items track by it.journal_sys_id">
+              <div class="modal-entry-header">
+                <div class="entry-meta">
+                  <span class="entry-field-label">{{m.byField[k].label}}</span>
+                  <strong class="entry-author">{{it.created_by_display}}</strong>
+                  <span class="entry-timestamp">{{it.created_on_display}}</span>
+                </div>
+              </div>
+              <div class="modal-entry-content">{{it.value}}</div>
+            </div>
+          </div>
+        </uib-tab>
+      </uib-tabset>
+    </div>
+
+    <div class="jahbless-reason-section">
+      <label class="reason-label">
+        <i class="fa fa-comment-o"></i> Reason for Action
+        <span class="text-danger">*</span>
+      </label>
+      <textarea class="form-control reason-textarea" 
+                rows="3" 
+                ng-model="m.reason"
+                placeholder="Required: Explain why you are performing this action..."
+                ng-class="{'error-input': m.showError}"></textarea>
+      <div class="field-error" ng-if="m.showError">
+        <i class="fa fa-exclamation-circle"></i>
+        A reason is required to proceed.
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer jahbless-modal-footer">
+    <button class="btn btn-default btn-lg jahbless-btn-cancel" ng-click="m.cancel()">
+      <i class="fa fa-times"></i> Cancel
+    </button>
+    <button class="btn btn-primary btn-lg jahbless-btn-confirm" ng-click="m.confirm()">
+      <i class="fa fa-check"></i> Confirm
+    </button>
+  </div>
+</div>]]></template>
+    </sp_ng_template>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</application>
+        <file_path/>
+        <instance_id>235a28e4db4f03402b157236bf9619fe</instance_id>
+        <instance_name>crossfuzedemosvs2</instance_name>
+        <name>sp_ng_template_ef6f5a58337e36105a6b0ff13d5c7b4d</name>
+        <payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sp_ng_template"&gt;&lt;sp_ng_template action="INSERT_OR_UPDATE"&gt;&lt;id&gt;jahbless-confirm-modal&lt;/id&gt;&lt;sp_widget display_value="Journal Admin Hub Widget"&gt;ed286198333a36105a6b0ff13d5c7b7a&lt;/sp_widget&gt;&lt;sys_class_name&gt;sp_ng_template&lt;/sys_class_name&gt;&lt;sys_created_by&gt;Michael.Herron@crossfuze.com&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2026-01-28 16:09:10&lt;/sys_created_on&gt;&lt;sys_id&gt;ef6f5a58337e36105a6b0ff13d5c7b4d&lt;/sys_id&gt;&lt;sys_mod_count&gt;1&lt;/sys_mod_count&gt;&lt;sys_name&gt;jahbless-confirm-modal&lt;/sys_name&gt;&lt;sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0"&gt;32b7e158333a36105a6b0ff13d5c7b8e&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite"&gt;32b7e158333a36105a6b0ff13d5c7b8e&lt;/sys_scope&gt;&lt;sys_update_name&gt;sp_ng_template_ef6f5a58337e36105a6b0ff13d5c7b4d&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;Michael.Herron@crossfuze.com&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2026-01-28 16:13:23&lt;/sys_updated_on&gt;&lt;template&gt;&lt;![CDATA[&lt;div class="jahbless-modal-wrapper"&gt;
+  &lt;div class="modal-header jahbless-modal-header"&gt;
+    &lt;button type="button" class="close jahbless-close" ng-click="m.cancel()" aria-label="Close"&gt;
+      &lt;span aria-hidden="true"&gt;&amp;times;&lt;/span&gt;
+    &lt;/button&gt;
+    &lt;h4 class="modal-title jahbless-modal-title"&gt;
+      &lt;i class="fa fa-exclamation-triangle"&gt;&lt;/i&gt;
+      Confirm Action
+    &lt;/h4&gt;
+  &lt;/div&gt;
+
+  &lt;div class="modal-body jahbless-modal-body"&gt;
+    &lt;div class="jahbless-modal-info"&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Action:&lt;/span&gt;
+        &lt;strong class="action-badge action-{{m.action}}"&gt;{{m.actionLabel}}&lt;/strong&gt;
+      &lt;/div&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Entries:&lt;/span&gt;
+        &lt;strong&gt;{{m.count}} {{m.count === 1 ? 'entry' : 'entries'}}&lt;/strong&gt;
+      &lt;/div&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Table:&lt;/span&gt;
+        &lt;strong&gt;{{m.tableLabel}}&lt;/strong&gt;
+      &lt;/div&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Record:&lt;/span&gt;
+        &lt;strong&gt;{{m.recordLabel}}&lt;/strong&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class="jahbless-warning-box"&gt;
+      &lt;i class="fa fa-exclamation-circle"&gt;&lt;/i&gt;
+      &lt;div&gt;
+        &lt;strong&gt;Warning:&lt;/strong&gt; This action cannot be undone.
+        {{m.count}} {{m.count === 1 ? 'entry' : 'entries'}} will be &lt;strong&gt;{{m.actionLabel}}&lt;/strong&gt;.
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class="jahbless-preview-section"&gt;
+      &lt;div class="preview-header"&gt;
+        &lt;i class="fa fa-eye"&gt;&lt;/i&gt; Affected Entries
+      &lt;/div&gt;
+      &lt;uib-tabset class="jahbless-modal-tabs"&gt;
+        &lt;uib-tab ng-repeat="k in m.fieldKeys" heading="{{m.byField[k].label}} ({{m.byField[k].items.length}})"&gt;
+          &lt;div class="modal-entry-list"&gt;
+            &lt;div class="modal-entry" ng-repeat="it in m.byField[k].items track by it.journal_sys_id"&gt;
+              &lt;div class="modal-entry-header"&gt;
+                &lt;div class="entry-meta"&gt;
+                  &lt;span class="entry-field-label"&gt;{{m.byField[k].label}}&lt;/span&gt;
+                  &lt;strong class="entry-author"&gt;{{it.created_by_display}}&lt;/strong&gt;
+                  &lt;span class="entry-timestamp"&gt;{{it.created_on_display}}&lt;/span&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div class="modal-entry-content"&gt;{{it.value}}&lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/uib-tab&gt;
+      &lt;/uib-tabset&gt;
+    &lt;/div&gt;
+
+    &lt;div class="jahbless-reason-section"&gt;
+      &lt;label class="reason-label"&gt;
+        &lt;i class="fa fa-comment-o"&gt;&lt;/i&gt; Reason for Action
+        &lt;span class="text-danger"&gt;*&lt;/span&gt;
+      &lt;/label&gt;
+      &lt;textarea class="form-control reason-textarea" 
+                rows="3" 
+                ng-model="m.reason"
+                placeholder="Required: Explain why you are performing this action..."
+                ng-class="{'error-input': m.showError}"&gt;&lt;/textarea&gt;
+      &lt;div class="field-error" ng-if="m.showError"&gt;
+        &lt;i class="fa fa-exclamation-circle"&gt;&lt;/i&gt;
+        A reason is required to proceed.
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class="modal-footer jahbless-modal-footer"&gt;
+    &lt;button class="btn btn-default btn-lg jahbless-btn-cancel" ng-click="m.cancel()"&gt;
+      &lt;i class="fa fa-times"&gt;&lt;/i&gt; Cancel
+    &lt;/button&gt;
+    &lt;button class="btn btn-primary btn-lg jahbless-btn-confirm" ng-click="m.confirm()"&gt;
+      &lt;i class="fa fa-check"&gt;&lt;/i&gt; Confirm
+    &lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;]]&gt;&lt;/template&gt;&lt;/sp_ng_template&gt;&lt;/record_update&gt;</payload>
+        <payload_hash>-379911679</payload_hash>
+        <record_name>jahbless-confirm-modal</record_name>
+        <reverted_from/>
+        <source>f2b7e158333a36105a6b0ff13d5c7ba3</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 16:13:23</sys_created_on>
+        <sys_id>027066dc337e36105a6b0ff13d5c7ba1</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19c056187dc0000001</sys_recorded_at>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 16:13:23</sys_updated_on>
+        <type>Angular ng-template</type>
+        <update_guid>027066dc2e7e3610246e85524ca0c3a0</update_guid>
+        <update_guid_history>027066dc2e7e3610246e85524ca0c3a0:-379911679,cc8f5e5c717e361092617c7bf68c6408:-1357860923</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="jahbless-confirm-modal">e2c7ea5833be36105a6b0ff13d5c7b03</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 16:45:22</sys_created_on>
+        <sys_db_object display_value="" name="sp_ng_template">sp_ng_template</sys_db_object>
+        <sys_id>ae1d50f04947428e9b5af3d5892f8664</sys_id>
+        <sys_metadata>ef6f5a58337e36105a6b0ff13d5c7b4d</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>jahbless-confirm-modal</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_scope_delete display_value="">0e9082ff173448648fd1eca1f6d05c90</sys_scope_delete>
+        <sys_update_name>sp_ng_template_ef6f5a58337e36105a6b0ff13d5c7b4d</sys_update_name>
+        <sys_update_version display_value="sp_ng_template_ef6f5a58337e36105a6b0ff13d5c7b4d">027066dc337e36105a6b0ff13d5c7ba1</sys_update_version>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 16:45:22</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>

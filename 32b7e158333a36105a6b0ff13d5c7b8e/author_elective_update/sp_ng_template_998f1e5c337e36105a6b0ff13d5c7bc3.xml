@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_ng_template">
+    <sp_ng_template action="DELETE">
+        <id>jahbless-redact-modal</id>
+        <sp_widget display_value="Journal Admin Hub Widget">ed286198333a36105a6b0ff13d5c7b7a</sp_widget>
+        <sys_class_name>sp_ng_template</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 16:11:41</sys_created_on>
+        <sys_id>998f1e5c337e36105a6b0ff13d5c7bc3</sys_id>
+        <sys_mod_count>1</sys_mod_count>
+        <sys_name>jahbless-redact-modal</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_update_name>sp_ng_template_998f1e5c337e36105a6b0ff13d5c7bc3</sys_update_name>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 16:13:43</sys_updated_on>
+        <template><![CDATA[<div class="jahbless-modal-wrapper jahbless-redact-wrapper">
+  <div class="modal-header jahbless-modal-header">
+    <button type="button" class="close jahbless-close" ng-click="m.cancel()" aria-label="Close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h4 class="modal-title jahbless-modal-title">
+      <i class="fa fa-scissors"></i>
+      Redact Specific Text
+    </h4>
+  </div>
+
+  <div class="modal-body jahbless-modal-body">
+    <div class="jahbless-modal-info">
+      <div class="info-row">
+        <span class="info-label">Table:</span>
+        <strong>{{m.tableLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Record:</span>
+        <strong>{{m.recordLabel}}</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Entries:</span>
+        <strong>{{m.items.length}}</strong>
+      </div>
+    </div>
+
+    <div class="jahbless-instruction-box">
+      <i class="fa fa-lightbulb-o"></i>
+      <div>
+        <strong>How to select text:</strong>
+        <ol style="margin: 8px 0 0 0; padding-left: 20px; line-height: 1.6;">
+          <li>Click and drag to highlight text in any entry below</li>
+          <li>Selected text will automatically appear in the input field</li>
+          <li>You can also type or paste text directly</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="jahbless-redact-items">
+      <div class="redact-item-card" ng-repeat="item in m.items track by item.journal_sys_id">
+        <div class="redact-card-header">
+          <div class="redact-card-info">
+            <span class="field-badge">{{item.field_label}}</span>
+            <span class="meta-divider">•</span>
+            <span class="meta-author">{{item.created_by_display}}</span>
+            <span class="meta-divider">•</span>
+            <span class="meta-timestamp">{{item.created_on_display}}</span>
+          </div>
+          <div class="redact-card-status" ng-if="item.target">
+            <i class="fa fa-check-circle"></i> Ready
+          </div>
+        </div>
+
+        <div class="redact-section-label">
+          <i class="fa fa-file-text-o"></i> Journal Entry Content
+        </div>
+
+        <div class="redact-text-viewer" id="redact_viewer_{{item.idx}}">
+          <div class="viewer-content" ng-bind-html="item.displayHTML"></div>
+        </div>
+
+        <div class="redact-input-area">
+          <label class="redact-label">
+            <i class="fa fa-scissors"></i> Text to Redact
+            <span class="text-danger">*</span>
+          </label>
+          <div class="input-with-action">
+            <input type="text" 
+                   class="form-control redact-input" 
+                   ng-model="item.target"
+                   placeholder="Select text above or type here..."
+                   ng-class="{'has-value': item.target, 'error-input': item.showError}">
+            <button type="button" 
+                    class="clear-input-btn" 
+                    ng-if="item.target"
+                    ng-click="m.clearSelection(item)"
+                    title="Clear">
+              <i class="fa fa-times"></i>
+            </button>
+          </div>
+          <div class="field-error" ng-if="item.showError">
+            <i class="fa fa-exclamation-circle"></i>
+            Please select or enter text to redact.
+          </div>
+          <div class="field-success" ng-if="item.target && !item.showError">
+            <i class="fa fa-check-circle"></i>
+            Will redact: "{{item.target | limitTo:60}}{{item.target.length > 60 ? '...' : ''}}"
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="jahbless-reason-section">
+      <label class="reason-label">
+        <i class="fa fa-comment-o"></i> Reason for Redaction
+        <span class="text-danger">*</span>
+      </label>
+      <textarea class="form-control reason-textarea" 
+                rows="3" 
+                ng-model="m.reason"
+                placeholder="Required: Explain why you are redacting this information (e.g., contains PII, sensitive data, etc.)"
+                ng-class="{'error-input': m.reasonError}"></textarea>
+      <div class="field-error" ng-if="m.reasonError">
+        <i class="fa fa-exclamation-circle"></i>
+        A reason is required to proceed with redaction.
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer jahbless-modal-footer">
+    <button class="btn btn-default btn-lg jahbless-btn-cancel" ng-click="m.cancel()">
+      <i class="fa fa-times"></i> Cancel
+    </button>
+    <button class="btn btn-primary btn-lg jahbless-btn-confirm" ng-click="m.confirm()">
+      <i class="fa fa-check"></i> Confirm Redaction
+    </button>
+  </div>
+</div>]]></template>
+    </sp_ng_template>
+    <sys_update_version action="INSERT_OR_UPDATE">
+        <action>DELETE</action>
+        <application display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</application>
+        <file_path/>
+        <instance_id>235a28e4db4f03402b157236bf9619fe</instance_id>
+        <instance_name>crossfuzedemosvs2</instance_name>
+        <name>sp_ng_template_998f1e5c337e36105a6b0ff13d5c7bc3</name>
+        <payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sp_ng_template"&gt;&lt;sp_ng_template action="INSERT_OR_UPDATE"&gt;&lt;id&gt;jahbless-redact-modal&lt;/id&gt;&lt;sp_widget display_value="Journal Admin Hub Widget"&gt;ed286198333a36105a6b0ff13d5c7b7a&lt;/sp_widget&gt;&lt;sys_class_name&gt;sp_ng_template&lt;/sys_class_name&gt;&lt;sys_created_by&gt;Michael.Herron@crossfuze.com&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2026-01-28 16:11:41&lt;/sys_created_on&gt;&lt;sys_id&gt;998f1e5c337e36105a6b0ff13d5c7bc3&lt;/sys_id&gt;&lt;sys_mod_count&gt;1&lt;/sys_mod_count&gt;&lt;sys_name&gt;jahbless-redact-modal&lt;/sys_name&gt;&lt;sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0"&gt;32b7e158333a36105a6b0ff13d5c7b8e&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite"&gt;32b7e158333a36105a6b0ff13d5c7b8e&lt;/sys_scope&gt;&lt;sys_update_name&gt;sp_ng_template_998f1e5c337e36105a6b0ff13d5c7bc3&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;Michael.Herron@crossfuze.com&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2026-01-28 16:13:43&lt;/sys_updated_on&gt;&lt;template&gt;&lt;![CDATA[&lt;div class="jahbless-modal-wrapper jahbless-redact-wrapper"&gt;
+  &lt;div class="modal-header jahbless-modal-header"&gt;
+    &lt;button type="button" class="close jahbless-close" ng-click="m.cancel()" aria-label="Close"&gt;
+      &lt;span aria-hidden="true"&gt;&amp;times;&lt;/span&gt;
+    &lt;/button&gt;
+    &lt;h4 class="modal-title jahbless-modal-title"&gt;
+      &lt;i class="fa fa-scissors"&gt;&lt;/i&gt;
+      Redact Specific Text
+    &lt;/h4&gt;
+  &lt;/div&gt;
+
+  &lt;div class="modal-body jahbless-modal-body"&gt;
+    &lt;div class="jahbless-modal-info"&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Table:&lt;/span&gt;
+        &lt;strong&gt;{{m.tableLabel}}&lt;/strong&gt;
+      &lt;/div&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Record:&lt;/span&gt;
+        &lt;strong&gt;{{m.recordLabel}}&lt;/strong&gt;
+      &lt;/div&gt;
+      &lt;div class="info-row"&gt;
+        &lt;span class="info-label"&gt;Entries:&lt;/span&gt;
+        &lt;strong&gt;{{m.items.length}}&lt;/strong&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class="jahbless-instruction-box"&gt;
+      &lt;i class="fa fa-lightbulb-o"&gt;&lt;/i&gt;
+      &lt;div&gt;
+        &lt;strong&gt;How to select text:&lt;/strong&gt;
+        &lt;ol style="margin: 8px 0 0 0; padding-left: 20px; line-height: 1.6;"&gt;
+          &lt;li&gt;Click and drag to highlight text in any entry below&lt;/li&gt;
+          &lt;li&gt;Selected text will automatically appear in the input field&lt;/li&gt;
+          &lt;li&gt;You can also type or paste text directly&lt;/li&gt;
+        &lt;/ol&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class="jahbless-redact-items"&gt;
+      &lt;div class="redact-item-card" ng-repeat="item in m.items track by item.journal_sys_id"&gt;
+        &lt;div class="redact-card-header"&gt;
+          &lt;div class="redact-card-info"&gt;
+            &lt;span class="field-badge"&gt;{{item.field_label}}&lt;/span&gt;
+            &lt;span class="meta-divider"&gt;•&lt;/span&gt;
+            &lt;span class="meta-author"&gt;{{item.created_by_display}}&lt;/span&gt;
+            &lt;span class="meta-divider"&gt;•&lt;/span&gt;
+            &lt;span class="meta-timestamp"&gt;{{item.created_on_display}}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="redact-card-status" ng-if="item.target"&gt;
+            &lt;i class="fa fa-check-circle"&gt;&lt;/i&gt; Ready
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        &lt;div class="redact-section-label"&gt;
+          &lt;i class="fa fa-file-text-o"&gt;&lt;/i&gt; Journal Entry Content
+        &lt;/div&gt;
+
+        &lt;div class="redact-text-viewer" id="redact_viewer_{{item.idx}}"&gt;
+          &lt;div class="viewer-content" ng-bind-html="item.displayHTML"&gt;&lt;/div&gt;
+        &lt;/div&gt;
+
+        &lt;div class="redact-input-area"&gt;
+          &lt;label class="redact-label"&gt;
+            &lt;i class="fa fa-scissors"&gt;&lt;/i&gt; Text to Redact
+            &lt;span class="text-danger"&gt;*&lt;/span&gt;
+          &lt;/label&gt;
+          &lt;div class="input-with-action"&gt;
+            &lt;input type="text" 
+                   class="form-control redact-input" 
+                   ng-model="item.target"
+                   placeholder="Select text above or type here..."
+                   ng-class="{'has-value': item.target, 'error-input': item.showError}"&gt;
+            &lt;button type="button" 
+                    class="clear-input-btn" 
+                    ng-if="item.target"
+                    ng-click="m.clearSelection(item)"
+                    title="Clear"&gt;
+              &lt;i class="fa fa-times"&gt;&lt;/i&gt;
+            &lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class="field-error" ng-if="item.showError"&gt;
+            &lt;i class="fa fa-exclamation-circle"&gt;&lt;/i&gt;
+            Please select or enter text to redact.
+          &lt;/div&gt;
+          &lt;div class="field-success" ng-if="item.target &amp;&amp; !item.showError"&gt;
+            &lt;i class="fa fa-check-circle"&gt;&lt;/i&gt;
+            Will redact: "{{item.target | limitTo:60}}{{item.target.length &gt; 60 ? '...' : ''}}"
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class="jahbless-reason-section"&gt;
+      &lt;label class="reason-label"&gt;
+        &lt;i class="fa fa-comment-o"&gt;&lt;/i&gt; Reason for Redaction
+        &lt;span class="text-danger"&gt;*&lt;/span&gt;
+      &lt;/label&gt;
+      &lt;textarea class="form-control reason-textarea" 
+                rows="3" 
+                ng-model="m.reason"
+                placeholder="Required: Explain why you are redacting this information (e.g., contains PII, sensitive data, etc.)"
+                ng-class="{'error-input': m.reasonError}"&gt;&lt;/textarea&gt;
+      &lt;div class="field-error" ng-if="m.reasonError"&gt;
+        &lt;i class="fa fa-exclamation-circle"&gt;&lt;/i&gt;
+        A reason is required to proceed with redaction.
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class="modal-footer jahbless-modal-footer"&gt;
+    &lt;button class="btn btn-default btn-lg jahbless-btn-cancel" ng-click="m.cancel()"&gt;
+      &lt;i class="fa fa-times"&gt;&lt;/i&gt; Cancel
+    &lt;/button&gt;
+    &lt;button class="btn btn-primary btn-lg jahbless-btn-confirm" ng-click="m.confirm()"&gt;
+      &lt;i class="fa fa-check"&gt;&lt;/i&gt; Confirm Redaction
+    &lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;]]&gt;&lt;/template&gt;&lt;/sp_ng_template&gt;&lt;/record_update&gt;</payload>
+        <payload_hash>1863593844</payload_hash>
+        <record_name>jahbless-redact-modal</record_name>
+        <reverted_from/>
+        <source>f2b7e158333a36105a6b0ff13d5c7ba3</source>
+        <source_table>sys_update_set</source_table>
+        <state>previous</state>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 16:13:43</sys_created_on>
+        <sys_id>4b80e6dc337e36105a6b0ff13d5c7bc3</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>19c0561d6220000001</sys_recorded_at>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 16:13:43</sys_updated_on>
+        <type>Angular ng-template</type>
+        <update_guid>4b80e6dc777e3610cb7c634cf7855ec2</update_guid>
+        <update_guid_history>4b80e6dc777e3610cb7c634cf7855ec2:1863593844,4d102e9c067e36108a8c393978f7751b:1684568416</update_guid_history>
+    </sys_update_version>
+    <sys_metadata_delete action="INSERT_OR_UPDATE">
+        <sys_audit_delete display_value="jahbless-redact-modal">6ec7aa5833be36105a6b0ff13d5c7b59</sys_audit_delete>
+        <sys_class_name>sys_metadata_delete</sys_class_name>
+        <sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+        <sys_created_on>2026-01-28 16:45:22</sys_created_on>
+        <sys_db_object display_value="" name="sp_ng_template">sp_ng_template</sys_db_object>
+        <sys_id>89579e66833c4cfc887ee78be1296744</sys_id>
+        <sys_metadata>998f1e5c337e36105a6b0ff13d5c7bc3</sys_metadata>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>jahbless-redact-modal</sys_name>
+        <sys_package display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite" source="x_cros2_journal_0">32b7e158333a36105a6b0ff13d5c7b8e</sys_package>
+        <sys_parent/>
+        <sys_policy/>
+        <sys_scope display_value="Journal Administration Hub: Bulk Log Entry Sanitisation Suite">32b7e158333a36105a6b0ff13d5c7b8e</sys_scope>
+        <sys_scope_delete display_value="">0e9082ff173448648fd1eca1f6d05c90</sys_scope_delete>
+        <sys_update_name>sp_ng_template_998f1e5c337e36105a6b0ff13d5c7bc3</sys_update_name>
+        <sys_update_version display_value="sp_ng_template_998f1e5c337e36105a6b0ff13d5c7bc3">4b80e6dc337e36105a6b0ff13d5c7bc3</sys_update_version>
+        <sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+        <sys_updated_on>2026-01-28 16:45:22</sys_updated_on>
+    </sys_metadata_delete>
+</record_update>
