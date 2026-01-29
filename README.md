@@ -103,20 +103,14 @@ The app supports these sys_properties:
 - `update_sets/global/`  
   The global Script Include update set export
 
-- `sn_source_control.properties`  
-  Source control metadata (if you later connect the app to ServiceNow Source Control)
-
 ---
 
 ## Contributing
 
-Issues and PRs welcome. If you submit changes, include:
-- a short description
-- what was changed
-- testing notes (table, record, action, expected result)
+This is just a bit of fun I'll probably never look at again :)
 
 ---
 
 ## License
 
-Add a license if you want others to reuse it. MIT is common for small utility repos.
+MIT
