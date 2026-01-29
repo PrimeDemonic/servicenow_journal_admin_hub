@@ -97,10 +97,10 @@ The app supports these sys_properties:
 
 ## Repo contents
 
-- `update_sets/scoped/`  
+- `/scoped/`  
   The scoped application update set export
 
-- `update_sets/global/`  
+- `/global/`  
   The global Script Include update set export
 
 ---
