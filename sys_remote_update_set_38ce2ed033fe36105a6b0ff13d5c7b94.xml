@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?><unload unload_date="2026-01-28 17:15:50">
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Global">global</application>
+<application_name>Global</application_name>
+<application_scope>global</application_scope>
+<application_version/>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>JAHBLESS - Global</name>
+<origin_sys_id/>
+<parent display_value=""/>
+<release_date/>
+<remote_base_update_set display_value=""/>
+<remote_parent_id/>
+<remote_sys_id>85facedc33fa36105a6b0ff13d5c7b3a</remote_sys_id>
+<state>loaded</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+<sys_created_on>2026-01-28 17:15:50</sys_created_on>
+<sys_id>38ce2ed033fe36105a6b0ff13d5c7b94</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+<sys_updated_on>2026-01-28 17:15:50</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Global">global</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_e7ca8adc33fa36105a6b0ff13d5c7b95</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sys_script_include"&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;&lt;access&gt;public&lt;/access&gt;&lt;active&gt;true&lt;/active&gt;&lt;api_name&gt;global.JahBlessGlobalJournalAdmin&lt;/api_name&gt;&lt;caller_access/&gt;&lt;client_callable&gt;false&lt;/client_callable&gt;&lt;description&gt;Global script include so we don't have to mess about with cross-scope privileges for important sys_x tables!&lt;/description&gt;&lt;mobile_callable&gt;false&lt;/mobile_callable&gt;&lt;name&gt;JahBlessGlobalJournalAdmin&lt;/name&gt;&lt;sandbox_callable&gt;false&lt;/sandbox_callable&gt;&lt;script&gt;&lt;![CDATA[var JahBlessGlobalJournalAdmin = Class.create();
+JahBlessGlobalJournalAdmin.prototype = {
+  initialize: function () {},
+
+  perform: function (payload) {
+    payload = payload || {};
+    var action = (payload.action || '').toString();
+    var table = (payload.table || '').toString();
+    var sysId = (payload.sys_id || '').toString();
+    var reason = (payload.reason || '').toString().trim();
+    var selected = payload.selected || [];
+    var redactMap = payload.redactMap || {};
+
+    if (!reason) return { ok: false, error: 'Reason is required.' };
+    if (!table || !sysId) return { ok: false, error: 'Missing table/sys_id.' };
+    if (!selected.length) return { ok: false, error: 'No journal entries selected.' };
+
+    // Clear prior messages so we can detect failures
+    try { gs.getSession().clearMessages(); } catch (e) {}
+
+    if (action === 'delete') return this._deleteEntries(table, sysId, selected, reason);
+    if (action === 'redact_full') return this._redactFull(table, sysId, selected, reason);
+    if (action === 'redact_partial') return this._redactPartial(table, sysId, selected, redactMap, reason);
+
+    return { ok: false, error: 'Unknown action.' };
+  },
+
+  _deleteEntries: function (table, sysId, selected, reason) {
+    var deletedJournal = 0;
+    var deletedAudit = 0;
+
+    for (var i = 0; i &lt; selected.length; i++) {
+      var s = selected[i] || {};
+      var journalId = (s.journal_sys_id || '').toString();
+      var fieldName = (s.field || '').toString();
+      var createdOn = (s.created_on || '').toString();
+      var value = (s.value || '').toString();
+
+      if (!journalId || !fieldName) continue;
+
+      this._logAction('delete', table, sysId, journalId, fieldName, reason);
+
+      try {
+        var grJ = new GlideRecord('sys_journal_field');
+        if (grJ.get(journalId) &amp;&amp; grJ.getValue('name') === table &amp;&amp; grJ.getValue('element_id') === sysId) {
+          grJ.deleteRecord();
+          deletedJournal++;
+        }
+      } catch (e1) {
+        gs.addErrorMessage(e1 + '');
+      }
+
+      deletedAudit += this._deleteMatchingAudit(sysId, fieldName, createdOn, value);
+    }
+
+    this._refreshHistory(table, sysId);
+
+    var err = this._getLastError();
+    if (err) return { ok: false, error: err };
+
+    return { ok: true, result: { deletedJournal: deletedJournal, deletedAudit: deletedAudit } };
+  },
+
+  _redactFull: function (table, sysId, selected, reason) {
+    var updatedJournal = 0;
+    var updatedAudit = 0;
+    var redactedText = '**Redacted by ' + gs.getUserName() + '**';
+
+    for (var i = 0; i &lt; selected.length; i++) {
+      var s = selected[i] || {};
+      var journalId = (s.journal_sys_id || '').toString();
+      var fieldName = (s.field || '').toString();
+      var createdOn = (s.created_on || '').toString();
+      var oldValue = (s.value || '').toString();
+
+      if (!journalId || !fieldName) continue;
+
+      this._logAction('redact_full', table, sysId, journalId, fieldName, reason);
+
+      try {
+        var grJ = new GlideRecord('sys_journal_field');
+        if (grJ.get(journalId) &amp;&amp; grJ.getValue('name') === table &amp;&amp; grJ.getValue('element_id') === sysId) {
+          grJ.setValue('value', redactedText);
+          grJ.update();
+          updatedJournal++;
+        }
+      } catch (e1) {
+        gs.addErrorMessage(e1 + '');
+      }
+
+      updatedAudit += this._updateMatchingAudit(sysId, fieldName, createdOn, oldValue, redactedText);
+    }
+
+    this._refreshHistory(table, sysId);
+
+    var err = this._getLastError();
+    if (err) return { ok: false, error: err };
+
+    return { ok: true, result: { updatedJournal: updatedJournal, updatedAudit: updatedAudit } };
+  },
+
+  _redactPartial: function (table, sysId, selected, redactMap, reason) {
+    var updatedJournal = 0;
+    var updatedAudit = 0;
+
+    for (var i = 0; i &lt; selected.length; i++) {
+      var s = selected[i] || {};
+      var journalId = (s.journal_sys_id || '').toString();
+      var fieldName = (s.field || '').toString();
+      var createdOn = (s.created_on || '').toString();
+      var oldValue = (s.value || '').toString();
+
+      var info = redactMap &amp;&amp; redactMap[journalId];
+      if (!info || info.mode !== 'partial') continue;
+
+      var target = (info.target || '').toString();
+      if (!target) continue;
+
+      var replacement = '**Redacted by ' + gs.getUserName() + '**';
+      var newValue = this._replaceFirstExact(oldValue, target, replacement);
+      if (newValue === oldValue) continue;
+
+      this._logAction('redact_partial', table, sysId, journalId, fieldName, reason);
+
+      try {
+        var grJ = new GlideRecord('sys_journal_field');
+        if (grJ.get(journalId) &amp;&amp; grJ.getValue('name') === table &amp;&amp; grJ.getValue('element_id') === sysId) {
+          grJ.setValue('value', newValue);
+          grJ.update();
+          updatedJournal++;
+        }
+      } catch (e1) {
+        gs.addErrorMessage(e1 + '');
+      }
+
+      updatedAudit += this._updateMatchingAudit(sysId, fieldName, createdOn, oldValue, newValue);
+    }
+
+    this._refreshHistory(table, sysId);
+
+    var err = this._getLastError();
+    if (err) return { ok: false, error: err };
+
+    return { ok: true, result: { updatedJournal: updatedJournal, updatedAudit: updatedAudit } };
+  },
+
+  _logAction: function (action, table, recordSysId, journalSysId, fieldName, reason) {
+    gs.info('[JAHBLESS] user=' + gs.getUserName() +
+      ' action=' + action +
+      ' table=' + table +
+      ' record=' + recordSysId +
+      ' journal=' + journalSysId +
+      ' field=' + fieldName +
+      ' reason="' + reason + '"');
+  },
+
+  _deleteMatchingAudit: function (sysId, fieldName, createdOn, oldValue) {
+    var count = 0;
+    try {
+      var grA = this._queryMatchingAudit(sysId, fieldName, createdOn, oldValue);
+      while (grA.next()) {
+        grA.deleteRecord();
+        count++;
+      }
+    } catch (e) {
+      gs.addErrorMessage(e + '');
+    }
+    return count;
+  },
+
+  _updateMatchingAudit: function (sysId, fieldName, createdOn, oldValue, newValue) {
+    var count = 0;
+    try {
+      var grA = this._queryMatchingAudit(sysId, fieldName, createdOn, oldValue);
+      while (grA.next()) {
+        if (grA.isValidField('newvalue')) grA.setValue('newvalue', newValue);
+        grA.update();
+        count++;
+      }
+    } catch (e) {
+      gs.addErrorMessage(e + '');
+    }
+    return count;
+  },
+
+  _queryMatchingAudit: function (sysId, fieldName, createdOn, oldValue) {
+    var grA = new GlideRecord('sys_audit');
+    grA.addQuery('documentkey', sysId);
+    grA.addQuery('fieldname', fieldName);
+    if (createdOn) grA.addQuery('sys_created_on', createdOn);
+    if (grA.isValidField('newvalue')) grA.addQuery('newvalue', oldValue);
+    grA.query();
+
+    if (!grA.hasNext() &amp;&amp; createdOn) {
+      grA = new GlideRecord('sys_audit');
+      grA.addQuery('documentkey', sysId);
+      grA.addQuery('fieldname', fieldName);
+      if (grA.isValidField('newvalue')) grA.addQuery('newvalue', oldValue);
+      grA.query();
+    }
+
+    return grA;
+  },
+
+  _refreshHistory: function (table, sysId) {
+    try {
+      var grHS = new GlideRecord('sys_history_set');
+      grHS.addQuery('id', sysId);
+      grHS.query();
+      while (grHS.next()) grHS.deleteRecord();
+    } catch (e) {
+      gs.addErrorMessage(e + '');
+    }
+
+    try {
+      var gr = new GlideRecord(table);
+      if (gr.get(sysId) &amp;&amp; typeof GlideHistorySet !== 'undefined') {
+        GlideHistorySet(gr).refresh();
+      }
+    } catch (e2) {}
+  },
+
+  _replaceFirstExact: function (haystack, needle, replacement) {
+    if (!needle) return haystack;
+    var idx = haystack.indexOf(needle);
+    if (idx &lt; 0) return haystack;
+    return haystack.substring(0, idx) + replacement + haystack.substring(idx + needle.length);
+  },
+
+  _getLastError: function () {
+    // 1) last error message (session)
+    try {
+      var last = gs.getSession().getLastErrorMessage();
+      if (last) return last + '';
+    } catch (e) {}
+
+    // 2) full error list (best-effort)
+    try {
+      var errs = gs.getErrorMessages();
+      if (errs &amp;&amp; errs.length) return errs.join(' | ');
+    } catch (e2) {}
+
+    return '';
+  },
+
+  type: 'JahBlessGlobalJournalAdmin'
+};]]&gt;&lt;/script&gt;&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;&lt;sys_created_by&gt;Michael.Herron@crossfuze.com&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2026-01-28 14:39:07&lt;/sys_created_on&gt;&lt;sys_id&gt;e7ca8adc33fa36105a6b0ff13d5c7b95&lt;/sys_id&gt;&lt;sys_mod_count&gt;2&lt;/sys_mod_count&gt;&lt;sys_name&gt;JahBlessGlobalJournalAdmin&lt;/sys_name&gt;&lt;sys_package display_value="Global" source="global"&gt;global&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Global"&gt;global&lt;/sys_scope&gt;&lt;sys_update_name&gt;sys_script_include_e7ca8adc33fa36105a6b0ff13d5c7b95&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;Michael.Herron@crossfuze.com&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2026-01-28 15:14:29&lt;/sys_updated_on&gt;&lt;/sys_script_include&gt;&lt;sys_es_latest_script action="INSERT_OR_UPDATE"&gt;&lt;id&gt;e7ca8adc33fa36105a6b0ff13d5c7b95&lt;/id&gt;&lt;sys_created_by&gt;Michael.Herron@crossfuze.com&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2026-01-28 14:39:07&lt;/sys_created_on&gt;&lt;sys_id&gt;89eacadc33fa36105a6b0ff13d5c7bc6&lt;/sys_id&gt;&lt;sys_mod_count&gt;0&lt;/sys_mod_count&gt;&lt;sys_updated_by&gt;Michael.Herron@crossfuze.com&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2026-01-28 14:39:07&lt;/sys_updated_on&gt;&lt;table&gt;sys_script_include&lt;/table&gt;&lt;use_es_latest&gt;true&lt;/use_es_latest&gt;&lt;/sys_es_latest_script&gt;&lt;/record_update&gt;</payload>
+<payload_hash>-1292746231</payload_hash>
+<remote_update_set display_value="JAHBLESS - Global">38ce2ed033fe36105a6b0ff13d5c7b94</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>Michael.Herron@crossfuze.com</sys_created_by>
+<sys_created_on>2026-01-28 17:15:50</sys_created_on>
+<sys_id>7cce2ed033fe36105a6b0ff13d5c7b94</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>19c052b9bb50000001</sys_recorded_at>
+<sys_updated_by>Michael.Herron@crossfuze.com</sys_updated_by>
+<sys_updated_on>2026-01-28 17:15:50</sys_updated_on>
+<table/>
+<target_name>JahBlessGlobalJournalAdmin</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>53f2ded8453e3610543072c99a714ab1</update_guid>
+<update_guid_history>53f2ded8453e3610543072c99a714ab1:-1292746231,740b4210233e36106c31e688750dee9b:-1668521464,51eacadcc0fa3610a16e6bc086b036cc:-342729833</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+</unload>
