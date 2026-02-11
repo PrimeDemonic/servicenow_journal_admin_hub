@@ -1,6 +1,6 @@
 # ServiceNow Journal Admin Hub (JAHBLESS)
 
-A guided ServiceNow UI for deleting or redacting journal entries (Additional comments / Work notes / other journal_input fields) with audit-aligned handling.
+A guided ServiceNow UI for deleting or redacting journal entries (Additional comments / Work notes / other journal_input fields) with audit aligned handling.
 
 > ⚠️ Disclaimer  
 > This is provided for learning and experimentation.  
@@ -10,7 +10,7 @@ A guided ServiceNow UI for deleting or redacting journal entries (Additional com
 
 ## What it does
 
-- Select a table and record via a guided UI
+- Select a table and record via a guided UI (or drive it via options and URL params)
 - View all journal fields for that record as tabs
 - Select one or more journal entries
 - Perform one of:
@@ -18,7 +18,7 @@ A guided ServiceNow UI for deleting or redacting journal entries (Additional com
   - Redact in full
   - Redact specific text
 - Requires a reason and presents a confirmation modal that shows exactly what will be affected
-- Logs a server-side system log entry per journal entry action
+- Logs a server side system log entry per journal entry action
 
 ---
 
@@ -32,9 +32,9 @@ This solution uses two parts:
    - Calls into the global executor for mutations
 
 2. **Global Script Include**
-   - Executes the actual update/delete operations against system tables
-   - Avoids needing to change core configuration of sys_ tables
-   - Returns success/failure with best-effort error messaging
+   - Executes the actual update delete operations against system tables
+   - The reason for this approach is to not have to change the core config of your sys_ tables
+   - Returns success failure with best effort error messaging
 
 ---
 
@@ -66,7 +66,7 @@ ServiceNow:
 The app supports these sys_properties:
 
 - `allowed_roles`
-  - Comma-separated roles allowed to use the tool
+  - Comma separated roles allowed to use the tool
   - Empty means no restriction
 - `use_secure_lookup`
   - `true` uses GlideRecordSecure for lookups
@@ -76,6 +76,7 @@ The app supports these sys_properties:
 
 ## Usage
 
+### Default guided mode
 1. Open **Journal Admin Hub** module
 2. Select the **Table**
 3. Select the **Record**
@@ -87,30 +88,31 @@ The app supports these sys_properties:
 
 ---
 
-## Notes / gotchas
+## Embedded mode, options, and URL params
 
-- Journal manipulation is sensitive. Test in sub-prod first.
-- Always validate that the journal and audit behavior meets your organisation’s expectations.
-- If you use `use_secure_lookup=true`, table and field visibility will follow user ACLs.
+The widget supports three ways to provide the target table and record:
 
----
+### Precedence
+1. **Widget instance options** (if provided)  
+2. **URL parameters** (if no options provided)  
+3. **Manual selection** (if neither options nor URL params provide values)
 
-## Repo contents
+### Widget instance options
 
-- `/scoped/`  
-  The scoped application update set export
+You can hide either picker and or preseed the table and record.
 
-- `/global/`  
-  The global Script Include update set export
+Supported options:
+- `hide_table_picker` (true false)
+- `hide_record_picker` (true false)
+- `table` (table name, e.g. `incident`)
+- `sys_id` (record sys_id)
+- `record` (alias for sys_id)
 
----
-
-## Contributing
-
-This is just a bit of fun I'll probably never look at again :)
-
----
-
-## License
-
-MIT
+Example widget instance options:
+```json
+{
+  "hide_table_picker": true,
+  "hide_record_picker": true,
+  "table": "incident",
+  "sys_id": "57af7aec73d423002728660c4cf6a71c"
+}
